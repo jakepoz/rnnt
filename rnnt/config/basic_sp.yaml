@@ -100,8 +100,10 @@ training:
     weight_decay: 0.01
   
   lr_scheduler:
-    name: cosine
+    _target_: rnnt.lr_sched.WarmupLR
     warmup_steps: 2000
+    force_anneal_step: 4000
+    anneal_factor: 0.999
 
 
 datasets:

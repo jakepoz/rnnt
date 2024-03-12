@@ -34,19 +34,15 @@ class AudioDatasetProcessor(torch.utils.data.Dataset):
         row = self.dataset[idx]
 
         audio = torch.from_numpy(row["audio"]["array"]).to(torch.float32)
-        text = row["text"]
+        text = row["text"].lower()
 
         audio_features = self.featurizer(audio)
-        text_tokens = self.tokenizer(text, return_tensors="pt")
+        text_tokens = torch.tensor(self.tokenizer.encode(text))
 
-        # Manually add the start token to the text tokens
-        text_tokens["input_ids"] = torch.cat([torch.tensor([self.tokenizer.bos_token_id]), text_tokens["input_ids"].squeeze(0)])
-        text_tokens["attention_mask"] = torch.cat([torch.tensor([1]), text_tokens["attention_mask"].squeeze(0)])
 
         return {
             "mel_features": audio_features,
-            "input_ids": text_tokens["input_ids"],  
-            "attention_mask": text_tokens["attention_mask"],
+            "input_ids": text_tokens,  
         }
     
 
@@ -60,17 +56,14 @@ class AudioDatasetCollator:
 
         mel_features = torch.zeros(len(batch), num_mel_features, longest_mel_feature)
         input_ids = torch.zeros(len(batch), max(input_id_lens), dtype=torch.int64)
-        attention_masks = torch.zeros(len(batch), max(input_id_lens), dtype=torch.int64)
 
         for i, x in enumerate(batch):
             mel_features[i, :, :x["mel_features"].shape[1]] = x["mel_features"]
             input_ids[i, :x["input_ids"].shape[0]] = x["input_ids"]
-            attention_masks[i, :x["input_ids"].shape[0]] = x["attention_mask"]
 
         return {
             "mel_features": mel_features,
             "mel_feature_lens": torch.tensor(mel_feature_lens),
             "input_ids": input_ids,
             "input_id_lens": torch.tensor(input_id_lens),
-            "attention_mask": attention_masks,
         }
