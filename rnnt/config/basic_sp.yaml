@@ -1,0 +1,144 @@
+model_name: "basic_char"
+
+tokenizer:
+  _target_: sentencepiece.SentencePieceProcessor
+  model_file: /home/jake/rnnt/spm_unigram_1023.model
+
+
+
+featurizer:
+  _target_: rnnt.featurizer.NormalizedMelSpectrogram
+  sample_rate: 16000
+  n_fft: 512
+  win_length: 400
+  hop_length: 160
+  n_mels: 80
+  f_min: 0
+  f_max: 8000
+  apply_linear_log: True
+  mean: 15.0
+  invstddev: 0.25
+
+encoder:
+  _target_: rnnt.jasper.AudioEncoder
+  input_features: ${featurizer.n_mels}
+  prologue_kernel_size: 11
+  prologue_stride: 2
+  blocks:
+    - _target_: rnnt.jasper.JasperBlock
+      kernel_size: 11
+      in_channels: 256
+      out_channels: 256
+      dropout: 0.2
+      num_sub_blocks: 4
+      additional_context: 2
+    - _target_: rnnt.jasper.JasperBlock
+      kernel_size: 13
+      in_channels: 256
+      out_channels: 384
+      dropout: 0.2
+      num_sub_blocks: 4    
+    # - _target_: rnnt.jasper.JasperBlock
+    #   kernel_size: 17
+    #   in_channels: 384
+    #   out_channels: 512
+    #   dropout: 0.2
+    #   num_sub_blocks: 4
+    # - _target_: rnnt.jasper.JasperBlock
+    #   kernel_size: 21
+    #   in_channels: 512
+    #   out_channels: 640
+    #   dropout: 0.3
+    #   num_sub_blocks: 4   
+    - _target_: rnnt.jasper.JasperBlock
+      kernel_size: 25
+      in_channels: 384
+      out_channels: 512
+      dropout: 0.3
+      num_sub_blocks: 4                
+  epilogue_features: 512
+  epilogue_kernel_size: 29
+  epilogue_dilation: 2
+  output_features: 1024
+
+joint:
+  _target_: rnnt.joint.JointNetwork
+  audio_features: ${encoder.output_features}
+  text_features: 1024
+  hidden_features: 1024
+  num_classes: ???
+
+
+
+training:
+  mixed_precision: bf16
+  num_epochs: 2
+  eval_steps: 20000
+  checkpoint_steps: 200000
+  max_input_len: 1024
+
+  pergpu_minibatch_size: 1
+  perstep_batch_size: 256
+
+  gradient_clipping: 10.0
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 1e-3
+    eps: 1e-8
+    betas: [0.9, 0.999]
+    weight_decay: 0.01
+  
+  lr_scheduler:
+    name: cosine
+    warmup_steps: 2000
+
+
+datasets:
+  cache_dir: /media/datasets/librispeech_hf
+
+  librispeech_100:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "train.clean.100"
+    cache_dir: ${datasets.cache_dir}
+  librispeech_360:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "train.clean.360"
+    cache_dir: ${datasets.cache_dir}
+  librispeech_500:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "train.other.500"
+    cache_dir: ${datasets.cache_dir}
+  librispeech_validation:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "validation.clean"
+    cache_dir: ${datasets.cache_dir}
+
+data:
+  processor_class: rnnt.dataset.AudioDatasetProcessor
+
+  train:
+    dataset:
+        - ${datasets.librispeech_100}
+        - ${datasets.librispeech_360}
+        - ${datasets.librispeech_500}
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: ${training.pergpu_minibatch_size}
+      shuffle: True
+      collate_fn:
+        _target_: rnnt.dataset.AudioDatasetCollator
+
+  eval:
+    dataset: ${datasets.librispeech_validation}
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: ${training.pergpu_minibatch_size}
+      shuffle: False
+      collate_fn:
+        _target_: rnnt.dataset.AudioDatasetCollator
+
+
+
+
