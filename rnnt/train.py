@@ -28,10 +28,10 @@ def train(cfg: DictConfig) -> None:
         eval_ds = concatenate_datasets(eval_ds)
 
    
-    # predictor = hydra.utils.instantiate(cfg.predictor, vocab_size=len(tokenmap) + 1)
-    # featurizer = hydra.utils.instantiate(cfg.featurizer)
-    # encoder = hydra.utils.instantiate(cfg.encoder)
-    # joint = hydra.utils.instantiate(cfg.joint, num_classes=len(tokenmap))
+    predictor = hydra.utils.instantiate(cfg.predictor)
+    featurizer = hydra.utils.instantiate(cfg.featurizer)
+    encoder = hydra.utils.instantiate(cfg.encoder)
+    joint = hydra.utils.instantiate(cfg.joint)
 
     # # Wrap those in the processor class, which can provide augmentations, tokenization, etc.
     # ds_processor = hydra.utils.get_class(cfg.data.processor_class)

@@ -1,10 +1,10 @@
 model_name: "basic_char"
 
+num_symbols: 1024
+
 tokenizer:
   _target_: sentencepiece.SentencePieceProcessor
   model_file: /home/jake/rnnt/spm_unigram_1023.model
-
-
 
 featurizer:
   _target_: rnnt.featurizer.NormalizedMelSpectrogram
@@ -18,6 +18,17 @@ featurizer:
   apply_linear_log: True
   mean: 15.0
   invstddev: 0.25
+
+predictor:
+ _target_: rnnt.predictor.LSTMPredictor
+ num_symbols: ${num_symbols}
+ output_dim: 1024
+ symbol_embedding_dim: 512
+ num_lstm_layers: 3
+ lstm_layer_norm: True
+ lstm_hidden_dim: ${predictor.symbol_embedding_dim}
+ lstm_layer_norm_epsilon: 1e-3
+ lstm_dropout: 0.3
 
 encoder:
   _target_: rnnt.jasper.AudioEncoder
@@ -66,7 +77,7 @@ joint:
   audio_features: ${encoder.output_features}
   text_features: 1024
   hidden_features: 1024
-  num_classes: ???
+  num_classes: ${num_symbols}
 
 
 
