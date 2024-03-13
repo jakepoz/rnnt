@@ -1,6 +1,8 @@
 model_name: "basic_char"
 
-num_symbols: 1024
+num_text_tokens: 1023
+num_total_symbols: 1024
+blank_idx: 1023
 
 tokenizer:
   _target_: sentencepiece.SentencePieceProcessor
@@ -21,7 +23,7 @@ featurizer:
 
 predictor:
  _target_: rnnt.predictor.LSTMPredictor
- num_symbols: ${num_symbols}
+ num_symbols: ${num_total_symbols} 
  output_dim: 1024
  symbol_embedding_dim: 512
  num_lstm_layers: 3
@@ -77,7 +79,7 @@ joint:
   audio_features: ${encoder.output_features}
   text_features: 1024
   hidden_features: 1024
-  num_classes: ${num_symbols}
+  num_classes: ${num_total_symbols}
 
 
 

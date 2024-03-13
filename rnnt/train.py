@@ -1,9 +1,7 @@
-import os
 import torch
 import torch.nn.functional as F
 import torchaudio
 import hydra
-import wandb
 import sentencepiece as spm
 from tqdm import tqdm
 
@@ -73,9 +71,11 @@ def train(cfg: DictConfig) -> None:
             input_ids = batch["input_ids"]
             input_id_lens = batch["input_id_lens"]
            
+            prepended_input_ids = torch.cat([torch.zeros(input_ids.shape[0], 1, dtype=input_ids.dtype), input_ids], dim=1)
+            prepended_input_ids[:, 0] = cfg.blank_idx
+
             # Use traditional predictor for decoder features
-            # TODO: This is WRONG because the first token needs to be the blank token to initialize it properly???
-            decoder_features, decoder_lengths, decoder_state = predictor(input_ids, input_id_lens)
+            decoder_features, decoder_lengths, decoder_state = predictor(prepended_input_ids, input_id_lens + 1)
          
             
             # Generate the audio features, with gradients this time
@@ -90,7 +90,7 @@ def train(cfg: DictConfig) -> None:
             loss = torchaudio.functional.rnnt_loss(logits=joint_features, 
                                                     targets=input_ids.int(),
                                                     logit_lengths=audio_feature_lens,
-                                                    target_lengths=input_id_lens.int() - 1, # -1 because we removed the start token
+                                                    target_lengths=input_id_lens.int(), 
                                                     blank=-1,
                                                     clamp=-1,
                                                     reduction="mean")

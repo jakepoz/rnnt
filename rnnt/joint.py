@@ -8,7 +8,7 @@ class JointNetwork(torch.nn.Module):
         self.text_ln = torch.nn.Linear(text_features, hidden_features)
 
         self.joint_dropout = torch.nn.Dropout(0.2)
-        self.joint_ln = torch.nn.Linear(hidden_features, num_classes + 1)
+        self.joint_ln = torch.nn.Linear(hidden_features, num_classes)
 
         self.blank_idx = num_classes
 
