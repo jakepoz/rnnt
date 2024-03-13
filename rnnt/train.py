@@ -7,14 +7,16 @@ from tqdm import tqdm
 
 from omegaconf import DictConfig, OmegaConf
 from datasets import concatenate_datasets
-
-
+from torch.utils.tensorboard import SummaryWriter
 
 @hydra.main(version_base=None, config_path="config", config_name="basic_sp.yaml")
 def train(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     print(f"Output directory  : {output_dir}")
+
+    # TensorBoard writer setup
+    writer = SummaryWriter(log_dir=output_dir)
 
     tokenizer = hydra.utils.instantiate(cfg.tokenizer)
 
@@ -25,7 +27,6 @@ def train(cfg: DictConfig) -> None:
     if isinstance(eval_ds, list):
         eval_ds = concatenate_datasets(eval_ds)
 
-   
     predictor = hydra.utils.instantiate(cfg.predictor)
     featurizer = hydra.utils.instantiate(cfg.featurizer)
     encoder = hydra.utils.instantiate(cfg.encoder)
@@ -42,9 +43,6 @@ def train(cfg: DictConfig) -> None:
     train_dataloader = hydra.utils.instantiate(cfg.data.train.dataloader, train_ds)
     eval_dataloader = hydra.utils.instantiate(cfg.data.eval.dataloader, eval_ds)
 
-  
-   
-
     params = [*predictor.parameters(), *encoder.parameters(), *joint.parameters()]
 
     print(f"Number of predictor parameters: {sum(p.numel() for p in predictor.parameters())}")
@@ -58,8 +56,6 @@ def train(cfg: DictConfig) -> None:
     encoder.train()
     joint.train()
 
-
-
     completed_steps = 0
 
     for epoch in range(cfg.training.num_epochs):
@@ -70,7 +66,7 @@ def train(cfg: DictConfig) -> None:
             mel_feature_lens = batch["mel_feature_lens"]
             input_ids = batch["input_ids"]
             input_id_lens = batch["input_id_lens"]
-           
+
             prepended_input_ids = torch.cat([torch.zeros(input_ids.shape[0], 1, dtype=input_ids.dtype), input_ids], dim=1)
             prepended_input_ids[:, 0] = cfg.blank_idx
 
@@ -88,12 +84,12 @@ def train(cfg: DictConfig) -> None:
 
             # Calculate the loss
             loss = torchaudio.functional.rnnt_loss(logits=joint_features, 
-                                                    targets=input_ids.int(),
-                                                    logit_lengths=audio_feature_lens,
-                                                    target_lengths=input_id_lens.int(), 
-                                                    blank=-1,
-                                                    clamp=-1,
-                                                    reduction="mean")
+                                                   targets=input_ids.int(),
+                                                   logit_lengths=audio_feature_lens,
+                                                   target_lengths=input_id_lens.int(), 
+                                                   blank=-1,
+                                                   clamp=-1,
+                                                   reduction="mean")
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params, cfg.training.gradient_clipping)
@@ -103,6 +99,11 @@ def train(cfg: DictConfig) -> None:
 
             completed_steps += 1
 
+            # TensorBoard logging
+            writer.add_scalar("Loss/train", loss.item(), completed_steps)
+            writer.add_scalar("Learning Rate", optimizer.param_groups[0]['lr'], completed_steps)
+
+    
             #     accelerator.log({
             #         "input_length/train": input_ids.shape[1],
             #         "loss/train": loss,
@@ -147,6 +148,7 @@ def train(cfg: DictConfig) -> None:
     # # Be sure to do one final save at the end
     # accelerator.save_state(output_dir=os.path.join(output_dir, f"checkpoint_step_{completed_steps}"))
     # accelerator.end_training()
+    writer.close()
 
 if __name__ == "__main__":
     train()
