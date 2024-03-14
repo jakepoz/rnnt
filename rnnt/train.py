@@ -4,6 +4,7 @@ import torchaudio
 import hydra
 import os
 import jiwer
+import numpy as np
 import sentencepiece as spm
 from tqdm import tqdm
 
@@ -64,13 +65,15 @@ def train(cfg: DictConfig) -> None:
     print(f"Number of encoder parameters: {sum(p.numel() for p in model.encoder.parameters()):,}")
     print(f"Number of joint parameters: {sum(p.numel() for p in model.joint.parameters()):,}")
 
+    total_steps = len(train_dataloader) * cfg.training.num_epochs
+    completed_steps = 0
+
     optimizer = hydra.utils.instantiate(cfg.training.optimizer, params)
-    lr_scheduler = hydra.utils.instantiate(cfg.training.lr_scheduler, optimizer)
+    lr_scheduler = hydra.utils.instantiate(cfg.training.lr_scheduler, optimizer, total_steps=total_steps)
 
     model = model.to(device)
     model.train()
 
-    completed_steps = 0
 
     for epoch in range(cfg.training.num_epochs):
         for step, batch in tqdm(
@@ -107,9 +110,6 @@ def train(cfg: DictConfig) -> None:
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params, cfg.training.gradient_clipping)
-            optimizer.step()
-            lr_scheduler.step()
-            optimizer.zero_grad()
 
             completed_steps += 1
 
@@ -118,6 +118,27 @@ def train(cfg: DictConfig) -> None:
             writer.add_scalar("loss/train", loss.item(), completed_steps)
             writer.add_scalar("learning_rate", optimizer.param_groups[0]['lr'], completed_steps)
             writer.add_scalar("epoch", epoch, completed_steps)
+
+            if completed_steps % cfg.training.log_steps == 0:
+                with torch.no_grad():
+                    # Log gradient histograms for each layer
+                    for name, parameter in model.named_parameters():
+                        if parameter.grad is not None:
+                            writer.add_histogram(f"{name}/gradients", parameter.grad, completed_steps)
+                            writer.add_histogram(f"{name}/weights", parameter, completed_steps)
+
+                            grad_norm = parameter.grad.norm(2).item()
+                            writer.add_scalar(f"{name}/grad_norm", grad_norm, completed_steps)
+
+                    writer.add_scalar("model_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.parameters()])), completed_steps)
+                    writer.add_scalar("joint_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.joint.parameters()])), completed_steps)
+                    writer.add_scalar("encoder_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.encoder.parameters()])), completed_steps)
+                    writer.add_scalar("predictor_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.predictor.parameters()])), completed_steps)
+
+            # Actually do the step and zero out the gradients
+            optimizer.step()
+            lr_scheduler.step()
+            optimizer.zero_grad()
 
 
             # Do an eval step periodically
@@ -131,7 +152,6 @@ def train(cfg: DictConfig) -> None:
                     mel_features = batch["mel_features"].to(device)
                     mel_feature_lens = batch["mel_feature_lens"].to(device)
                     input_ids = batch["input_ids"].to(device)
-                    input_id_lens = batch["input_id_lens"].to(device)
                     
                     decoded_tokens = model.greedy_decode(mel_features, mel_feature_lens, max_length=batch["input_ids"].shape[1] * 2)
                     decoded_text = tokenizer.decode(decoded_tokens)

@@ -86,26 +86,26 @@ joint:
 training:
   mixed_precision: bf16
   num_epochs: 4
+  log_steps: 2000
   eval_steps: 2000
   checkpoint_steps: 200000
   max_input_len: 1024
 
-  pergpu_minibatch_size: 1
-  perstep_batch_size: 256
+  pergpu_minibatch_size: 2
+  #perstep_batch_size: 256
 
   gradient_clipping: 10.0
   optimizer:
     _target_: torch.optim.AdamW
-    lr: 1e-3
+    lr: 1e-4
     eps: 1e-8
     betas: [0.9, 0.999]
     weight_decay: 0.01
   
   lr_scheduler:
-    _target_: rnnt.lr_sched.WarmupLR
+    _target_: rnnt.lr_sched.WarmupCosineDecayLR
     warmup_steps: 2000
-    force_anneal_step: 4000
-    anneal_factor: 0.999
+    total_steps: ???
 
 
 datasets:
@@ -149,7 +149,7 @@ data:
 
     dataloader:
       _target_: torch.utils.data.DataLoader
-      batch_size: ${training.pergpu_minibatch_size}
+      batch_size: 1
       shuffle: False
       collate_fn:
         _target_: rnnt.dataset.AudioDatasetCollator
