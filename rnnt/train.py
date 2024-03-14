@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import torchaudio
 import hydra
+import os
 import sentencepiece as spm
 from tqdm import tqdm
 
@@ -10,6 +11,13 @@ from rnnt.model import RNNTModel
 from omegaconf import DictConfig, OmegaConf
 from datasets import concatenate_datasets
 from torch.utils.tensorboard import SummaryWriter
+
+def save_model(model, optimizer, completed_steps, output_dir):
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'completed_steps': completed_steps,
+    }, os.path.join(output_dir, f"checkpoint_step_{completed_steps}.pt"))
 
 @hydra.main(version_base=None, config_path="config", config_name="basic_sp.yaml")
 def train(cfg: DictConfig) -> None:
@@ -111,43 +119,36 @@ def train(cfg: DictConfig) -> None:
             writer.add_scalar("epoch", epoch, completed_steps)
 
 
-            # # Do an eval step periodically
-            # if completed_steps % cfg.training.eval_steps == 0:
-            #     encoder.eval()
-            #     joint.eval()
-            #     predictor.eval()
+            # Do an eval step periodically
+            if completed_steps % cfg.training.eval_steps == 0:
+                model.eval()
 
-            #     print("Starting eval...")
+                print("Starting eval...")
 
-            #     text_table = wandb.Table(columns=["step", "original_text", "decoded_text"])
-
-            #     for step, batch in enumerate(eval_dataloader):
-            #         mel_features = batch["mel_features"][0]
-            #         input_ids = batch["input_ids"][0]
+                for step, batch in enumerate(eval_dataloader):
+                    mel_features = batch["mel_features"].to(device)
+                    mel_feature_lens = batch["mel_feature_lens"].to(device)
+                    input_ids = batch["input_ids"].to(device)
+                    input_id_lens = batch["input_id_lens"].to(device)
                     
-            #         decoded_text = greedy_decode_audio(mel_features, llm, accelerator.unwrap_model(encoder), accelerator.unwrap_model(joint), tokenmap, tokenizer)
-                    
-            #         text_table.add_data(step, tokenizer.decode(input_ids), decoded_text)
+                    decoded_tokens = model.greedy_decode(mel_features, mel_feature_lens, max_length=batch["input_ids"].shape[1] * 2)
+                    decoded_text = tokenizer.decode(decoded_tokens)
 
-            #         print(f"S: {step} Original: {tokenizer.decode(input_ids)} Decoded: {decoded_text}")
+                    print(f"S: {step}\nOriginal: {tokenizer.decode(input_ids[0].cpu().tolist())}\nDecoded : {decoded_text}")
 
-            #         if step > 5:
-            #             break
+                    if step > 5:
+                        break
 
-            #     wandb_tracker.log({"text_examples/eval": text_table}, step=completed_steps)
-
-            #     encoder.train()
-            #     joint.train()
-            #     predictor.train()
+                print("Done with eval...")
+                model.train()
 
 
-            # if completed_steps % cfg.training.checkpoint_steps == 0:
-            #     accelerator.save_state(output_dir=os.path.join(output_dir, f"checkpoint_step_{completed_steps}"))
+            if completed_steps % cfg.training.checkpoint_steps == 0:
+                save_model(model, optimizer, completed_steps, output_dir)
             
 
-    # # Be sure to do one final save at the end
-    # accelerator.save_state(output_dir=os.path.join(output_dir, f"checkpoint_step_{completed_steps}"))
-    # accelerator.end_training()
+    # Be sure to do one final save at the end
+    save_model(model, optimizer, completed_steps, output_dir)
     writer.close()
 
 if __name__ == "__main__":

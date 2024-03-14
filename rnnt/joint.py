@@ -10,7 +10,7 @@ class JointNetwork(torch.nn.Module):
         self.joint_dropout = torch.nn.Dropout(0.2)
         self.joint_ln = torch.nn.Linear(hidden_features, num_classes)
 
-        self.blank_idx = num_classes
+        self.blank_idx = num_classes - 1
 
     # Use this version to do training on a batch, where you need to calculate every combination of joint and decoder states
     # Audio Frame expected to be [N, Length, Featuers]
