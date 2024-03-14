@@ -85,8 +85,8 @@ joint:
 
 training:
   mixed_precision: bf16
-  num_epochs: 2
-  eval_steps: 20
+  num_epochs: 4
+  eval_steps: 2000
   checkpoint_steps: 200000
   max_input_len: 1024
 

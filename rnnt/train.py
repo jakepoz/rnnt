@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import torchaudio
 import hydra
 import os
+import jiwer
 import sentencepiece as spm
 from tqdm import tqdm
 
@@ -124,6 +125,7 @@ def train(cfg: DictConfig) -> None:
                 model.eval()
 
                 print("Starting eval...")
+                originals, decoded = [], []
 
                 for step, batch in enumerate(eval_dataloader):
                     mel_features = batch["mel_features"].to(device)
@@ -133,12 +135,23 @@ def train(cfg: DictConfig) -> None:
                     
                     decoded_tokens = model.greedy_decode(mel_features, mel_feature_lens, max_length=batch["input_ids"].shape[1] * 2)
                     decoded_text = tokenizer.decode(decoded_tokens)
+                    original_text = tokenizer.decode(input_ids[0].cpu().tolist())
 
-                    print(f"S: {step}\nOriginal: {tokenizer.decode(input_ids[0].cpu().tolist())}\nDecoded : {decoded_text}")
+                    print(f"\nOriginal: {original_text}\nDecoded : {decoded_text}")
+
+                    writer.add_text(f"original_text_{step}/eval", original_text, completed_steps)
+                    writer.add_text(f"decoded_text_{step}/eval", decoded_text, completed_steps)
+
+                    originals.append(original_text)
+                    decoded.append(decoded_text)
 
                     if step > 5:
                         break
 
+                # Calculate overall wer using jiwer
+                wer = jiwer.wer(originals, decoded)
+                writer.add_scalar("wer/eval", wer, completed_steps)
+                
                 print("Done with eval...")
                 model.train()
 
