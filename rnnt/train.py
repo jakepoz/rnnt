@@ -5,6 +5,8 @@ import hydra
 import sentencepiece as spm
 from tqdm import tqdm
 
+from rnnt.model import RNNTModel
+
 from omegaconf import DictConfig, OmegaConf
 from datasets import concatenate_datasets
 from torch.utils.tensorboard import SummaryWriter
@@ -29,10 +31,12 @@ def train(cfg: DictConfig) -> None:
     if isinstance(eval_ds, list):
         eval_ds = concatenate_datasets(eval_ds)
 
-    predictor = hydra.utils.instantiate(cfg.predictor)
     featurizer = hydra.utils.instantiate(cfg.featurizer)
-    encoder = hydra.utils.instantiate(cfg.encoder)
-    joint = hydra.utils.instantiate(cfg.joint)
+
+
+    model = RNNTModel(hydra.utils.instantiate(cfg.predictor),
+                      hydra.utils.instantiate(cfg.encoder),
+                      hydra.utils.instantiate(cfg.joint))
 
     # Wrap those in the processor class, which can provide augmentations, tokenization, etc.
     ds_processor = hydra.utils.get_class(cfg.data.processor_class)
@@ -45,22 +49,17 @@ def train(cfg: DictConfig) -> None:
     train_dataloader = hydra.utils.instantiate(cfg.data.train.dataloader, train_ds)
     eval_dataloader = hydra.utils.instantiate(cfg.data.eval.dataloader, eval_ds)
 
-    params = [*predictor.parameters(), *encoder.parameters(), *joint.parameters()]
+    params = model.parameters()
 
-    print(f"Number of predictor parameters: {sum(p.numel() for p in predictor.parameters())}")
-    print(f"Number of encoder parameters: {sum(p.numel() for p in encoder.parameters())}")
-    print(f"Number of joint parameters: {sum(p.numel() for p in joint.parameters())}")
+    print(f"Number of predictor parameters: {sum(p.numel() for p in model.predictor.parameters()):,}")
+    print(f"Number of encoder parameters: {sum(p.numel() for p in model.encoder.parameters()):,}")
+    print(f"Number of joint parameters: {sum(p.numel() for p in model.joint.parameters()):,}")
 
     optimizer = hydra.utils.instantiate(cfg.training.optimizer, params)
     lr_scheduler = hydra.utils.instantiate(cfg.training.lr_scheduler, optimizer)
 
-    predictor = predictor.to(device)
-    encoder = encoder.to(device)
-    joint = joint.to(device)
-
-    predictor.train()
-    encoder.train()
-    joint.train()
+    model = model.to(device)
+    model.train()
 
     completed_steps = 0
 
@@ -77,16 +76,16 @@ def train(cfg: DictConfig) -> None:
             prepended_input_ids[:, 0] = cfg.blank_idx
 
             # Use traditional predictor for decoder features
-            decoder_features, decoder_lengths, decoder_state = predictor(prepended_input_ids, input_id_lens + 1)
+            decoder_features, decoder_lengths, decoder_state = model.predictor(prepended_input_ids, input_id_lens + 1)
          
             
             # Generate the audio features, with gradients this time
-            audio_features = encoder(mel_features) # (N, C, L)
+            audio_features = model.encoder(mel_features) # (N, C, L)
             audio_features = audio_features.permute(0, 2, 1) # (N, L, C)
-            audio_feature_lens = encoder.calc_output_lens(mel_feature_lens)
+            audio_feature_lens = model.encoder.calc_output_lens(mel_feature_lens)
 
             # Now, apply the joint model to each combination
-            joint_features = joint(audio_features, decoder_features)
+            joint_features = model.joint(audio_features, decoder_features)
 
             # Calculate the loss
             loss = torchaudio.functional.rnnt_loss(logits=joint_features, 
