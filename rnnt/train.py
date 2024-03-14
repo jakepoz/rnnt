@@ -15,6 +15,8 @@ def train(cfg: DictConfig) -> None:
     output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     print(f"Output directory  : {output_dir}")
 
+    device = torch.device("cuda")
+
     # TensorBoard writer setup
     writer = SummaryWriter(log_dir=output_dir)
 
@@ -52,6 +54,10 @@ def train(cfg: DictConfig) -> None:
     optimizer = hydra.utils.instantiate(cfg.training.optimizer, params)
     lr_scheduler = hydra.utils.instantiate(cfg.training.lr_scheduler, optimizer)
 
+    predictor = predictor.to(device)
+    encoder = encoder.to(device)
+    joint = joint.to(device)
+
     predictor.train()
     encoder.train()
     joint.train()
@@ -62,12 +68,12 @@ def train(cfg: DictConfig) -> None:
         for step, batch in tqdm(
             enumerate(train_dataloader), total=len(train_dataloader),
         ):
-            mel_features = batch["mel_features"]
-            mel_feature_lens = batch["mel_feature_lens"]
-            input_ids = batch["input_ids"]
-            input_id_lens = batch["input_id_lens"]
+            mel_features = batch["mel_features"].to(device)
+            mel_feature_lens = batch["mel_feature_lens"].to(device)
+            input_ids = batch["input_ids"].to(device)
+            input_id_lens = batch["input_id_lens"].to(device)
 
-            prepended_input_ids = torch.cat([torch.zeros(input_ids.shape[0], 1, dtype=input_ids.dtype), input_ids], dim=1)
+            prepended_input_ids = torch.cat([torch.zeros(input_ids.shape[0], 1, dtype=input_ids.dtype, device=device), input_ids], dim=1)
             prepended_input_ids[:, 0] = cfg.blank_idx
 
             # Use traditional predictor for decoder features
@@ -100,16 +106,11 @@ def train(cfg: DictConfig) -> None:
             completed_steps += 1
 
             # TensorBoard logging
-            writer.add_scalar("Loss/train", loss.item(), completed_steps)
-            writer.add_scalar("Learning Rate", optimizer.param_groups[0]['lr'], completed_steps)
+            writer.add_scalar("input_length/train", input_ids.shape[1], completed_steps)
+            writer.add_scalar("loss/train", loss.item(), completed_steps)
+            writer.add_scalar("learning_rate", optimizer.param_groups[0]['lr'], completed_steps)
+            writer.add_scalar("epoch", epoch, completed_steps)
 
-    
-            #     accelerator.log({
-            #         "input_length/train": input_ids.shape[1],
-            #         "loss/train": loss,
-            #         "lr": lr_scheduler.get_last_lr()[0],
-            #         "epoch": epoch,
-            #     })
 
             # # Do an eval step periodically
             # if completed_steps % cfg.training.eval_steps == 0:
