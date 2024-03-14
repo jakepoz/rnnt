@@ -109,14 +109,15 @@ def train(cfg: DictConfig) -> None:
                                                    reduction="mean")
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(params, cfg.training.gradient_clipping)
+            total_norm = torch.nn.utils.clip_grad_norm_(params, cfg.training.gradient_clipping)
 
             completed_steps += 1
 
             # TensorBoard logging
-            writer.add_scalar("input_length/train", input_ids.shape[1], completed_steps)
+            writer.add_scalar("input_length/train", sum(input_id_lens.tolist()), completed_steps)
             writer.add_scalar("loss/train", loss.item(), completed_steps)
             writer.add_scalar("learning_rate", optimizer.param_groups[0]['lr'], completed_steps)
+            writer.add_scalar("total_norm/train", total_norm, completed_steps)
             writer.add_scalar("epoch", epoch, completed_steps)
 
             if completed_steps % cfg.training.log_steps == 0:
@@ -124,11 +125,11 @@ def train(cfg: DictConfig) -> None:
                     # Log gradient histograms for each layer
                     for name, parameter in model.named_parameters():
                         if parameter.grad is not None:
-                            writer.add_histogram(f"{name}/gradients", parameter.grad, completed_steps)
-                            writer.add_histogram(f"{name}/weights", parameter, completed_steps)
+                            writer.add_histogram(f"debug/{name}/gradients", parameter.grad, completed_steps)
+                            writer.add_histogram(f"debug/{name}/weights", parameter, completed_steps)
 
                             grad_norm = parameter.grad.norm(2).item()
-                            writer.add_scalar(f"{name}/grad_norm", grad_norm, completed_steps)
+                            writer.add_scalar(f"debug/{name}/grad_norm", grad_norm, completed_steps)
 
                     writer.add_scalar("model_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.parameters()])), completed_steps)
                     writer.add_scalar("joint_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.joint.parameters()])), completed_steps)

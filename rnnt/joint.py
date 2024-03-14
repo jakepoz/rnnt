@@ -7,7 +7,8 @@ class JointNetwork(torch.nn.Module):
         self.audio_ln = torch.nn.Linear(audio_features, hidden_features)
         self.text_ln = torch.nn.Linear(text_features, hidden_features)
 
-        self.joint_dropout = torch.nn.Dropout(0.2)
+        # We used to put dropout in, but not for now during testing
+        #self.joint_dropout = torch.nn.Dropout(0.2)
         self.joint_ln = torch.nn.Linear(hidden_features, num_classes)
 
         self.blank_idx = num_classes - 1
@@ -24,8 +25,7 @@ class JointNetwork(torch.nn.Module):
 
         joint_frames = audio_frames + text_frames
 
-        joint_frames = F.gelu(joint_frames)
-        joint_frames = self.joint_dropout(joint_frames)
+        joint_frames = F.tanh(joint_frames)
 
         return self.joint_ln(joint_frames)
     
@@ -38,8 +38,7 @@ class JointNetwork(torch.nn.Module):
 
         joint_frame = audio_frame + text_frame
 
-        joint_frame = F.gelu(joint_frame)
-        joint_frame = self.joint_dropout(joint_frame)
+        joint_frame = F.tanh(joint_frame)
 
         return self.joint_ln(joint_frame)
         
