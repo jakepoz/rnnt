@@ -39,6 +39,7 @@ def train(cfg: DictConfig) -> None:
         eval_ds = concatenate_datasets(eval_ds)
 
     featurizer = hydra.utils.instantiate(cfg.featurizer)
+    featurizer = featurizer.to(device)
 
 
     model = RNNTModel(hydra.utils.instantiate(cfg.predictor),

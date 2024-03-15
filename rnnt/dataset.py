@@ -1,7 +1,6 @@
 import torch
 import datasets
 
-from transformers import PreTrainedTokenizer
 
 
 # These functions are meant to fetch the raw datasets from hugging face or some other system
@@ -22,7 +21,7 @@ def get_librispeech_dataset(split: str, cache_dir="/media/datasets/librispeech_h
 
 # This class actually takes the raw audio and text data, applys any augmentations to them, and does the tokenization
 class AudioDatasetProcessor(torch.utils.data.Dataset):
-    def __init__(self, dataset, tokenizer: PreTrainedTokenizer, featurizer: torch.nn.Module):
+    def __init__(self, dataset, tokenizer, featurizer: torch.nn.Module):
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.featurizer = featurizer

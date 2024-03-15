@@ -6,8 +6,8 @@ from rnnt.train import train
 
 def objective(trial):
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
-    beta0 = trial.suggest_float("beta0", 0.9, 0.999)
-    beta1 = trial.suggest_float("beta1", 0.9, 0.999)
+    beta0 = trial.suggest_float("beta0", 0.9, 0.9999, log=True)
+    beta1 = trial.suggest_float("beta1", beta0, 0.9999, log=True)
     apply_linear_log = trial.suggest_categorical("apply_linear_log", [True, False])
     featurize_mean = trial.suggest_float("featurize_mean", 0.0, 30.0)
     featurize_invstddev = trial.suggest_float("featurize_invstddev", 0.1, 0.5)
