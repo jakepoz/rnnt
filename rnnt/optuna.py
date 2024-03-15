@@ -47,9 +47,7 @@ def objective(trial):
 if __name__ == "__main__":
     study = optuna.create_study(study_name="single_epoch_base", 
                                 direction="minimize",
-                                storage= optuna.storages.JournalStorage(
-                                    optuna.storages.JournalFileStorage("./optuna-journal.log"),  
-                                ),
+                                storage= optuna.storages.RDBStorage(url="postgresql://optuna_user:password@localhost/optuna_db"),
                                 load_if_exists=True,
                                 )
 
