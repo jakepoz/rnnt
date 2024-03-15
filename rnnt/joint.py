@@ -7,6 +7,8 @@ class JointNetwork(torch.nn.Module):
         self.audio_ln = torch.nn.Linear(audio_features, hidden_features)
         self.text_ln = torch.nn.Linear(text_features, hidden_features)
 
+        self.activation = F.tanh
+ 
         # We used to put dropout in, but not for now during testing
         #self.joint_dropout = torch.nn.Dropout(0.2)
         self.joint_ln = torch.nn.Linear(hidden_features, num_classes)
@@ -38,7 +40,7 @@ class JointNetwork(torch.nn.Module):
 
         joint_frame = audio_frame + text_frame
 
-        joint_frame = F.tanh(joint_frame)
+        joint_frame = self.activation(joint_frame)
 
         return self.joint_ln(joint_frame)
         

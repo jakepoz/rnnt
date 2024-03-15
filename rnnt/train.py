@@ -16,9 +16,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 def save_model(model, optimizer, completed_steps, output_dir):
     torch.save({
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'completed_steps': completed_steps,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "completed_steps": completed_steps,
     }, os.path.join(output_dir, f"checkpoint_step_{completed_steps}.pt"))
 
 @hydra.main(version_base=None, config_path="config", config_name="basic_sp.yaml")
@@ -65,6 +65,26 @@ def train(cfg: DictConfig) -> None:
     print(f"Number of encoder parameters: {sum(p.numel() for p in model.encoder.parameters()):,}")
     print(f"Number of joint parameters: {sum(p.numel() for p in model.joint.parameters()):,}")
 
+    hparams = {
+        "batch_size": cfg.data.train.dataloader.batch_size,
+        "num_epochs": cfg.training.num_epochs,
+        "num_text_tokens": cfg.num_text_tokens,
+        "mixed_precision": cfg.training.mixed_precision,
+        "gradient_clipping": cfg.training.gradient_clipping,
+
+        "learning_rate": cfg.training.optimizer.lr,
+        "optimizer_eps": cfg.training.optimizer.eps,
+        "optimizer_beta_0": cfg.training.optimizer.betas[0],
+        "optimizer_beta_1": cfg.training.optimizer.betas[1],
+        "optimizer_weight_decay": cfg.training.optimizer.weight_decay,
+
+        "featurizer_n_mels": cfg.featurizer.n_mels,
+        "featurizer_n_fft": cfg.featurizer.n_fft,
+        "featurizer.apply_linear_log": str(cfg.featurizer.apply_linear_log),
+        "featurizer.mean": cfg.featurizer.mean,
+        "featurizer.invstddev": cfg.featurizer.invstddev,
+    }
+
     total_steps = len(train_dataloader) * cfg.training.num_epochs
     completed_steps = 0
 
@@ -105,18 +125,18 @@ def train(cfg: DictConfig) -> None:
                                                    logit_lengths=audio_feature_lens,
                                                    target_lengths=input_id_lens.int(), 
                                                    blank=-1,
-                                                   clamp=-1,
+                                                   clamp=cfg.training.rnnt_grad_clamp,
                                                    reduction="mean")
 
             loss.backward()
-            total_norm = torch.nn.utils.clip_grad_norm_(params, cfg.training.gradient_clipping)
+            total_norm = torch.nn.utils.clip_grad_norm_(params, cfg.training.clip_grad_norm)
 
             completed_steps += 1
 
             # TensorBoard logging
             writer.add_scalar("input_length/train", sum(input_id_lens.tolist()), completed_steps)
             writer.add_scalar("loss/train", loss.item(), completed_steps)
-            writer.add_scalar("learning_rate", optimizer.param_groups[0]['lr'], completed_steps)
+            writer.add_scalar("learning_rate", optimizer.param_groups[0]["lr"], completed_steps)
             writer.add_scalar("total_norm/train", total_norm, completed_steps)
             writer.add_scalar("epoch", epoch, completed_steps)
 
@@ -166,7 +186,7 @@ def train(cfg: DictConfig) -> None:
                     originals.append(original_text)
                     decoded.append(decoded_text)
 
-                    if step > 5:
+                    if step > cfg.eval.max_elements:
                         break
 
                 # Calculate overall wer using jiwer
