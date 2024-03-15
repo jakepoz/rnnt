@@ -1,0 +1,25 @@
+# For hyperparameter optimization
+optuna
+optuna-dashboard
+
+# Datasets
+datasets
+
+# For loading audio files in the datasets
+soundfile
+librosa
+
+# For loading logs
+hydra-core
+
+# For tokenization
+sentencepiece
+
+# For logging stuff during training
+tensorboard
+
+# For calculating error metrics
+jiwer
+
+# For connecting to optuna postgres
+psycopg2-binary
