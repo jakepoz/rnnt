@@ -163,7 +163,7 @@ def train(cfg: DictConfig) -> None:
                     originals.append(original_text)
                     decoded.append(decoded_text)
 
-                    if step > cfg.eval.max_elements:
+                    if step > cfg.data.eval.max_elements:
                         break
 
                 # Calculate overall wer using jiwer

@@ -1,5 +1,5 @@
 import optuna
-import hydra
+import traceback
 from omegaconf import OmegaConf
 from hydra import compose, initialize
 from rnnt.train import train
@@ -29,28 +29,30 @@ def objective(trial):
         cfg.featurizer.mean = featurize_mean
         cfg.featurizer.invstddev = featurize_invstddev
         
-        cfg.predictor.lstm.dropout = lstm_dropout
+        cfg.predictor.lstm_dropout = lstm_dropout
         
         # Run training with the current set of hyperparameters
         try:
             wer = train(cfg)
         except Exception as e:
-            print(e)
+            print(f"Exception during training: {e}")
+            print(traceback.format_exc())
             wer = float('inf')
 
     # Optuna aims to minimize the objective, so if you have a metric that should be maximized, 
     # you need to return its negative value. Here, we assume WER (Word Error Rate) should be minimized.
     return wer
 
-# Define the study and start the optimization
-study = optuna.create_study(direction='minimize')
-study.optimize(objective, n_trials=20)
 
-print("Number of finished trials: ", len(study.trials))
-print("Best trial:")
-trial = study.best_trial
+if __name__ == "__main__":
+    study = optuna.create_study(study_name="single_epoch_base", 
+                                direction="minimize",
+                                storage= optuna.storages.JournalStorage(
+                                    optuna.storages.JournalFileStorage("./optuna-journal.log"),  
+                                ),
+                                load_if_exists=True,
+                                )
 
-print("  Value: ", trial.value)
-print("  Params: ")
-for key, value in trial.params.items():
-    print(f"    {key}: {value}")
+    print(f"Sampler is {study.sampler.__class__.__name__}")
+
+    study.optimize(objective, n_trials=10)
