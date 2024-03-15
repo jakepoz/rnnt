@@ -21,10 +21,12 @@ def get_librispeech_dataset(split: str, cache_dir="/media/datasets/librispeech_h
 
 # This class actually takes the raw audio and text data, applys any augmentations to them, and does the tokenization
 class AudioDatasetProcessor(torch.utils.data.Dataset):
-    def __init__(self, dataset, tokenizer, featurizer: torch.nn.Module):
+    def __init__(self, dataset, tokenizer, featurizer: torch.nn.Module, device: torch.device):
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.featurizer = featurizer
+
+        self.device = device
 
     def __len__(self):
         return len(self.dataset)
@@ -32,11 +34,11 @@ class AudioDatasetProcessor(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         row = self.dataset[idx]
 
-        audio = torch.from_numpy(row["audio"]["array"]).to(torch.float32)
+        audio = torch.from_numpy(row["audio"]["array"]).to(torch.float32).to(self.device)
         text = row["text"].lower()
 
         audio_features = self.featurizer(audio)
-        text_tokens = torch.tensor(self.tokenizer.encode(text))
+        text_tokens = torch.tensor(self.tokenizer.encode(text)).to(self.device)
 
 
         return {

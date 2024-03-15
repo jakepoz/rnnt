@@ -48,8 +48,8 @@ def train(cfg: DictConfig) -> None:
 
     # Wrap those in the processor class, which can provide augmentations, tokenization, etc.
     ds_processor = hydra.utils.get_class(cfg.data.processor_class)
-    train_ds = ds_processor(train_ds, tokenizer, featurizer)
-    eval_ds = ds_processor(eval_ds, tokenizer, featurizer)
+    train_ds = ds_processor(train_ds, tokenizer, featurizer, device)
+    eval_ds = ds_processor(eval_ds, tokenizer, featurizer, device)
 
     print(f"Train dataset size: {len(train_ds)}")
     print(f"Eval dataset size : {len(eval_ds)}")
