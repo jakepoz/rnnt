@@ -8,23 +8,20 @@ import numpy as np
 import sentencepiece as spm
 from tqdm import tqdm
 
-from rnnt.model import RNNTModel
-
 from omegaconf import DictConfig, OmegaConf
 from datasets import concatenate_datasets
 from torch.utils.tensorboard import SummaryWriter
 
-def save_model(model, optimizer, completed_steps, output_dir):
-    torch.save({
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "completed_steps": completed_steps,
-    }, os.path.join(output_dir, f"checkpoint_step_{completed_steps}.pt"))
+from rnnt.model import RNNTModel
+from rnnt.util import save_model, get_output_dir
+
 
 @hydra.main(version_base=None, config_path="config", config_name="basic_sp.yaml")
 def train(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
-    output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+    output_dir = get_output_dir(cfg)
+    with open(os.path.join(output_dir, "config.yaml"), "w") as f:
+        f.write(OmegaConf.to_yaml(cfg))
     print(f"Output directory  : {output_dir}")
 
     device = torch.device("cuda")
@@ -64,26 +61,6 @@ def train(cfg: DictConfig) -> None:
     print(f"Number of predictor parameters: {sum(p.numel() for p in model.predictor.parameters()):,}")
     print(f"Number of encoder parameters: {sum(p.numel() for p in model.encoder.parameters()):,}")
     print(f"Number of joint parameters: {sum(p.numel() for p in model.joint.parameters()):,}")
-
-    hparams = {
-        "batch_size": cfg.data.train.dataloader.batch_size,
-        "num_epochs": cfg.training.num_epochs,
-        "num_text_tokens": cfg.num_text_tokens,
-        "mixed_precision": cfg.training.mixed_precision,
-        "gradient_clipping": cfg.training.gradient_clipping,
-
-        "learning_rate": cfg.training.optimizer.lr,
-        "optimizer_eps": cfg.training.optimizer.eps,
-        "optimizer_beta_0": cfg.training.optimizer.betas[0],
-        "optimizer_beta_1": cfg.training.optimizer.betas[1],
-        "optimizer_weight_decay": cfg.training.optimizer.weight_decay,
-
-        "featurizer_n_mels": cfg.featurizer.n_mels,
-        "featurizer_n_fft": cfg.featurizer.n_fft,
-        "featurizer.apply_linear_log": str(cfg.featurizer.apply_linear_log),
-        "featurizer.mean": cfg.featurizer.mean,
-        "featurizer.invstddev": cfg.featurizer.invstddev,
-    }
 
     total_steps = len(train_dataloader) * cfg.training.num_epochs
     completed_steps = 0
@@ -163,7 +140,7 @@ def train(cfg: DictConfig) -> None:
 
 
             # Do an eval step periodically
-            if completed_steps % cfg.training.eval_steps == 0:
+            if completed_steps % cfg.training.eval_steps == 0 or completed_steps == total_steps:
                 model.eval()
 
                 print("Starting eval...")
@@ -204,6 +181,9 @@ def train(cfg: DictConfig) -> None:
     # Be sure to do one final save at the end
     save_model(model, optimizer, completed_steps, output_dir)
     writer.close()
+
+    # Returns last wer
+    return wer
 
 if __name__ == "__main__":
     train()

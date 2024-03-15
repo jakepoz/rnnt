@@ -10,6 +10,13 @@
             "request": "launch",
             "module": "rnnt.train",
             "justMyCode": true
+        },
+        {
+            "name": "Python: Optuna",
+            "type": "python",
+            "request": "launch",
+            "module": "rnnt.optuna",
+            "justMyCode": true
         }
     ]
 }
