@@ -39,17 +39,17 @@ def train(cfg: DictConfig) -> None:
         eval_ds = concatenate_datasets(eval_ds)
 
     featurizer = hydra.utils.instantiate(cfg.featurizer)
-    featurizer = featurizer.to(device)
-
-
+    
     model = RNNTModel(hydra.utils.instantiate(cfg.predictor),
                       hydra.utils.instantiate(cfg.encoder),
                       hydra.utils.instantiate(cfg.joint))
+    
+    model = model.to(device)
 
     # Wrap those in the processor class, which can provide augmentations, tokenization, etc.
     ds_processor = hydra.utils.get_class(cfg.data.processor_class)
-    train_ds = ds_processor(train_ds, tokenizer, featurizer, device)
-    eval_ds = ds_processor(eval_ds, tokenizer, featurizer, device)
+    train_ds = ds_processor(train_ds, tokenizer, featurizer, torch.device("cpu"))
+    eval_ds = ds_processor(eval_ds, tokenizer, featurizer, torch.device("cpu"))
 
     print(f"Train dataset size: {len(train_ds)}")
     print(f"Eval dataset size : {len(eval_ds)}")
@@ -69,7 +69,7 @@ def train(cfg: DictConfig) -> None:
     optimizer = hydra.utils.instantiate(cfg.training.optimizer, params)
     lr_scheduler = hydra.utils.instantiate(cfg.training.lr_scheduler, optimizer, total_steps=total_steps)
 
-    model = model.to(device)
+
     model.train()
 
 
@@ -87,7 +87,6 @@ def train(cfg: DictConfig) -> None:
 
             # Use traditional predictor for decoder features
             decoder_features, decoder_lengths, decoder_state = model.predictor(prepended_input_ids, input_id_lens + 1)
-         
             
             # Generate the audio features, with gradients this time
             audio_features = model.encoder(mel_features) # (N, C, L)

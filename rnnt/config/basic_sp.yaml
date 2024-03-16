@@ -143,6 +143,7 @@ data:
       _target_: torch.utils.data.DataLoader
       batch_size: ${training.pergpu_minibatch_size}
       shuffle: True
+      num_workers: 10
       collate_fn:
         _target_: rnnt.dataset.AudioDatasetCollator
 
