@@ -12,6 +12,16 @@
             "justMyCode": true
         },
         {
+            "name": "Python: Eval",
+            "type": "python",
+            "request": "launch",
+            "module": "rnnt.eval",
+            "args": [
+                "+checkpoint=/home/jake/rnnt/experiments/basic_char/run-42/checkpoint_step_140621.pt"
+            ],
+            "justMyCode": true
+        },
+        {
             "name": "Python: Optuna",
             "type": "python",
             "request": "launch",
