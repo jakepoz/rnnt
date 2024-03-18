@@ -6,12 +6,9 @@ from rnnt.train import train
 
 def objective(trial):
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
-    beta0 = trial.suggest_float("beta0", 0.8, 0.9999, log=True)
-    beta1 = trial.suggest_float("beta1", beta0, 0.9999, log=True)
+    batch_size = trial.suggest_categorical("batch_size", [2, 4, 8])
+    norm_type = trial.suggest_categorical("norm_type", ["batch", "layer"])
 
-    lstm_dropout = trial.suggest_float("lstm_dropout", 0.0, 0.5)
-    weight_decay = trial.suggest_float("weight_decay", 1e-3, 10, log=True)
-    optimizer_eps = trial.suggest_float("optimzier_eps", 1e-9, 1e-5, log=True)
 
     with initialize(config_path="config"):
         # Load your existing configuration
@@ -19,12 +16,12 @@ def objective(trial):
         
         # Update the configuration with the suggested hyperparameters
         cfg.training.optimizer.lr = learning_rate
-        cfg.training.optimizer.betas = (beta0, beta1)
-        cfg.training.optimizer.weight_decay = weight_decay
-        cfg.training.optimizer.eps = optimizer_eps
+        cfg.training.pergpu_minibatch_size = batch_size
+        cfg.encoder.norm_type = norm_type
 
-        cfg.predictor.lstm_dropout = lstm_dropout
-        
+        for block in cfg.encoder.blocks:
+            block.norm_type = norm_type
+
         # Run training with the current set of hyperparameters
         try:
             wer = train(cfg)
@@ -41,7 +38,7 @@ def objective(trial):
 if __name__ == "__main__":
 
 
-    study = optuna.create_study(study_name="single_epoch_base", 
+    study = optuna.create_study(study_name="single_epoch_batch_and_norms", 
                                 direction="minimize",
                                 storage= optuna.storages.RDBStorage(url="postgresql://optuna_user:password@localhost/optuna_db"),
                                 load_if_exists=True,

@@ -35,6 +35,7 @@ predictor:
 encoder:
   _target_: rnnt.jasper.AudioEncoder
   input_features: ${featurizer.n_mels}
+  norm_type: batch
   prologue_kernel_size: 11
   prologue_stride: 2
   blocks:
@@ -44,31 +45,22 @@ encoder:
       out_channels: 256
       dropout: 0.2
       num_sub_blocks: 4
+      norm_type: batch
       additional_context: 2
     - _target_: rnnt.jasper.JasperBlock
       kernel_size: 13
       in_channels: 256
       out_channels: 384
       dropout: 0.2
-      num_sub_blocks: 4    
-    # - _target_: rnnt.jasper.JasperBlock
-    #   kernel_size: 17
-    #   in_channels: 384
-    #   out_channels: 512
-    #   dropout: 0.2
-    #   num_sub_blocks: 4
-    # - _target_: rnnt.jasper.JasperBlock
-    #   kernel_size: 21
-    #   in_channels: 512
-    #   out_channels: 640
-    #   dropout: 0.3
-    #   num_sub_blocks: 4   
+      num_sub_blocks: 4   
+      norm_type: batch   
     - _target_: rnnt.jasper.JasperBlock
       kernel_size: 25
       in_channels: 384
       out_channels: 512
       dropout: 0.3
       num_sub_blocks: 4                
+      norm_type: batch
   epilogue_features: 512
   epilogue_kernel_size: 29
   epilogue_dilation: 2
