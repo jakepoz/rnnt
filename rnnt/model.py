@@ -29,11 +29,11 @@ class RNNTModel(torch.nn.Module):
         cur_outputs_per_step = 0
         max_outputs_per_step = 10
 
+        input_ids = torch.tensor([tokens], dtype=torch.int64, device=self.device)
+        predictor_features, _, predictor_state = self.predictor(input_ids, torch.tensor([len(tokens)], dtype=torch.int64, device=self.device))
+
         while cur_audio_time < max_audio_time and len(tokens) < max_length:
-            input_ids = torch.tensor([tokens], dtype=torch.int64, device=self.device)
-
-            predictor_features, _, _ = self.predictor(input_ids, torch.tensor([len(tokens)], dtype=torch.int64, device=self.device))
-
+            
             joint_features = self.joint.single_forward(audio_features[:, cur_audio_time, :], predictor_features[:, -1, :])
 
             # Get the most likely token
@@ -45,6 +45,11 @@ class RNNTModel(torch.nn.Module):
                 cur_outputs_per_step = 0
             else:
                 tokens.append(token_idx)
+
+                # Update the predictor features
+                input_ids = torch.tensor([tokens], dtype=torch.int64, device=self.device)
+                predictor_features, _, predictor_state = self.predictor(input_ids, torch.tensor([len(tokens)], dtype=torch.int64, device=self.device), predictor_state)
+
                 cur_outputs_per_step += 1
 
         # Convert the token ids back to text via the tokenmap
