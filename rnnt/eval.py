@@ -60,7 +60,7 @@ def eval(cfg: DictConfig) -> None:
 
     start_time = time.perf_counter()
 
-    for step, batch in tqdm(enumerate(eval_dataloader)):
+    for step, batch in tqdm(enumerate(eval_dataloader), total=len(eval_dataloader)):
         mel_features = batch["mel_features"].to(device)
         mel_feature_lens = batch["mel_feature_lens"].to(device)
         input_ids = batch["input_ids"].to(device)
@@ -74,13 +74,16 @@ def eval(cfg: DictConfig) -> None:
         originals.append(original_text)
         decoded.append(decoded_text)
 
-        if step > cfg.data.eval.max_elements:
+        # if step > cfg.data.eval.max_elements:
+        #     break
+        if step > 10:
             break
 
     # Calculate overall wer using jiwer
     wer = jiwer.wer(originals, decoded)
 
-    print("fDone with eval... WER = {wer:.2f}")
+    print(f"Done with eval... WER = {wer:.3f}")
+    print(f"Time per sample: {(time.perf_counter() - start_time) / len(originals):.3f} s")
     model.train()
 
       
