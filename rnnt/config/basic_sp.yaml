@@ -89,7 +89,8 @@ training:
   log_steps: 2000
   eval_steps: 20000
   checkpoint_steps: 100000
-  max_input_len: 1024
+  max_joint_size: 160000
+
 
   pergpu_minibatch_size: 2
   #perstep_batch_size: 256

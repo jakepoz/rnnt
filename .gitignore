@@ -1,5 +1,6 @@
 outputs/
 experiments/
+experiments-old/
 test/
 
 # Byte-compiled / optimized / DLL files

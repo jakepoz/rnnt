@@ -82,6 +82,20 @@ def train(cfg: DictConfig) -> None:
             input_ids = batch["input_ids"].to(device)
             input_id_lens = batch["input_id_lens"].to(device)
 
+            # Calculate the total size of the joint feature vector, which will probably cause OOMs if it exceed an amount
+            max_joint_size = torch.max(input_id_lens).item() * torch.max(mel_feature_lens).item()
+            print(f"Max joint feature size: {max_joint_size:,}")
+
+            if max_joint_size > cfg.training.max_joint_size:
+                print("Cutting batch in half, it's probably too large otherwise")
+                new_batch_size = mel_features.shape[0] // 2
+                mel_feature_lens = mel_feature_lens[:new_batch_size]
+                mel_features = mel_features[:new_batch_size, :, :torch.max(mel_feature_lens).item()]
+                input_id_lens = input_id_lens[:new_batch_size]
+                input_ids = input_ids[:new_batch_size, :torch.max(input_id_lens).item()]
+                
+
+
             prepended_input_ids = torch.cat([torch.zeros(input_ids.shape[0], 1, dtype=input_ids.dtype, device=device), input_ids], dim=1)
             prepended_input_ids[:, 0] = cfg.blank_idx
 
