@@ -6,7 +6,7 @@ from .causalconv import CausalConv1d
 
 # Basic design from https://arxiv.org/pdf/1904.03288.pdf
 class JasperBlock(torch.nn.Module):
-    def __init__(self, kernel_size, in_channels, out_channels, dropout, num_sub_blocks, norm_type: Literal["batch", "layer"] = "batch", additional_context: int = 0):
+    def __init__(self, kernel_size, in_channels, out_channels, dropout, num_sub_blocks, norm_type: Literal["batch", "instance", "instance_affine"] = "batch", additional_context: int = 0):
         super(JasperBlock, self).__init__()
         self.convs = torch.nn.ModuleList()
         self.norms = torch.nn.ModuleList()
@@ -21,15 +21,19 @@ class JasperBlock(torch.nn.Module):
 
             if norm_type == "batch":
                 self.norms.append(torch.nn.BatchNorm1d(out_channels))
-            elif norm_type == "layer":
-                self.norms.append(torch.nn.LayerNorm(out_channels))
+            elif norm_type == "instance":
+                self.norms.append(torch.nn.InstanceNorm1d(out_channels))
+            elif norm_type == "instance_affine":
+                self.norms.append(torch.nn.InstanceNorm1d(out_channels, affine=True))
 
         self.residual_conv = torch.nn.Conv1d(in_channels, out_channels, 1)
 
         if norm_type == "batch":
             self.residual_norm = torch.nn.BatchNorm1d(out_channels)
-        elif norm_type == "layer":
-            self.residual_norm = torch.nn.LayerNorm(out_channels)
+        elif norm_type == "instance":
+            self.residual_norm = torch.nn.InstanceNorm1d(out_channels)
+        elif norm_type == "instance_affine":
+            self.residual_norm = torch.nn.InstanceNorm1d(out_channels, affine=True)
 
         self.dropout = torch.nn.Dropout(dropout)
         
@@ -59,7 +63,7 @@ class AudioEncoder(torch.nn.Module):
                        blocks: list[JasperBlock]=[],
                        epilogue_features: int=896, epilogue_kernel_size: int=29, epilogue_stride: int=1, epilogue_dilation: int=2,
                        output_features: int=1024,
-                       norm_type: Literal["batch", "layer"] = "batch"):
+                       norm_type: Literal["batch", "instance", "instance_affine"] = "batch"):
         super(AudioEncoder, self).__init__()
 
         self.blocks = torch.nn.Sequential()
@@ -76,8 +80,10 @@ class AudioEncoder(torch.nn.Module):
 
         if norm_type == "batch":
             self.blocks.append(torch.nn.BatchNorm1d(first_block_input_size))
-        elif norm_type == "layer":
-            self.blocks.append(torch.nn.LayerNorm(first_block_input_size))
+        elif norm_type == "instance":
+            self.blocks.append(torch.nn.InstanceNorm1d(first_block_input_size))
+        elif norm_type == "instance_affine":
+            self.blocks.append(torch.nn.InstanceNorm1d(first_block_input_size, affine=True))
 
         self.blocks.append(torch.nn.GELU())
 
@@ -91,8 +97,10 @@ class AudioEncoder(torch.nn.Module):
 
         if norm_type == "batch":
             self.blocks.append(torch.nn.BatchNorm1d(epilogue_features))
-        elif norm_type == "layer":
-            self.blocks.append(torch.nn.LayerNorm(epilogue_features))
+        elif norm_type == "instance":
+            self.blocks.append(torch.nn.InstanceNorm1d(epilogue_features))
+        elif norm_type == "instance_affine":
+            self.blocks.append(torch.nn.InstanceNorm1d(epilogue_features, affine=True))
 
         self.blocks.append(torch.nn.GELU())
 

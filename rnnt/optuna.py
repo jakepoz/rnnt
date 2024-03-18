@@ -7,7 +7,7 @@ from rnnt.train import train
 def objective(trial):
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
     batch_size = trial.suggest_categorical("batch_size", [2, 4, 8])
-    norm_type = trial.suggest_categorical("norm_type", ["batch", "layer"])
+    norm_type = trial.suggest_categorical("norm_type", ["batch", "instance", "instance_affine"])
 
 
     with initialize(config_path="config"):
