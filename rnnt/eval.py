@@ -74,9 +74,7 @@ def eval(cfg: DictConfig) -> None:
         originals.append(original_text)
         decoded.append(decoded_text)
 
-        # if step > cfg.data.eval.max_elements:
-        #     break
-        if step > 100:
+        if step > cfg.data.eval.max_elements:
             break
 
     # Calculate overall wer using jiwer

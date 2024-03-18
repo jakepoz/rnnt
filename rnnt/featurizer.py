@@ -20,7 +20,7 @@ class NormalizedMelSpectrogram(torchaudio.transforms.MelSpectrogram):
         self.mean = mean
         self.invstddev = invstddev
 
-
+    @torch.no_grad()
     def forward(self, waveform):
         mel_spec = super().forward(waveform)
 
