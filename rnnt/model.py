@@ -48,9 +48,11 @@ class RNNTModel(torch.nn.Module):
 
                 # Update the predictor features
                 input_ids = torch.tensor([tokens], dtype=torch.int64, device=self.device)
+                input_ids = input_ids[:, -1].unsqueeze(0) # Since we have the state, we just need to feed in the last one
+
                 predictor_features, _, predictor_state = self.predictor(input_ids, torch.tensor([len(tokens)], dtype=torch.int64, device=self.device), predictor_state)
 
                 cur_outputs_per_step += 1
 
-        # Convert the token ids back to text via the tokenmap
+        # Return tokens, skipping that first blank which was just to initialize the RNN state
         return tokens[1:] 

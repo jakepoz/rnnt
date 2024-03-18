@@ -76,7 +76,7 @@ def eval(cfg: DictConfig) -> None:
 
         # if step > cfg.data.eval.max_elements:
         #     break
-        if step > 10:
+        if step > 100:
             break
 
     # Calculate overall wer using jiwer
