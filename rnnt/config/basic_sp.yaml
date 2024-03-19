@@ -82,9 +82,10 @@ training:
   eval_steps: 20000
   checkpoint_steps: 100000
   max_joint_size: 160000
+  max_mel_length: 2048
+  max_input_id_length: 205
 
-
-  pergpu_minibatch_size: 2
+  pergpu_minibatch_size: 4
   #perstep_batch_size: 256
 
   clip_grad_norm: 10.0
@@ -92,7 +93,7 @@ training:
 
   optimizer:
     _target_: torch.optim.AdamW
-    lr: 1e-4
+    lr: 4e-4
     eps: 1e-8
     betas: [0.9, 0.999]
     weight_decay: 0.01

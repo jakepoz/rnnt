@@ -136,6 +136,9 @@ class LSTMPredictor(torch.nn.Module):
 
         self.lstm_dropout = lstm_dropout
 
+        self._cuda_graph = None
+        self._compiled_inputs = None
+
     def forward(
         self,
         input: torch.Tensor,
@@ -182,3 +185,34 @@ class LSTMPredictor(torch.nn.Module):
         linear_out = self.linear(lstm_out)
         output_layer_norm_out = self.output_layer_norm(linear_out)
         return output_layer_norm_out.permute(1, 0, 2), lengths, state_out
+
+    def compile_model(self, optimizer, batch_size: int=4, max_length: int=256):
+        assert self._cuda_graph is None and self._compiled_inputs is None, "Already compiled the model"
+
+        tokens = torch.randint(0, self.embedding.num_embeddings, (batch_size, max_length), device=self.embedding.weight.device, requires_grad=False)
+        lengths = torch.randint(1, max_length, (batch_size,), device=self.embedding.weight.device, requires_grad=False)
+
+        self._compiled_inputs = tuple(v.clone() for v in (tokens, lengths))
+
+        s = torch.cuda.Stream()
+        s.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(s):
+            _ = self.forward(*self._compiled_inputs)
+        torch.cuda.current_stream().wait_stream(s)
+
+
+        self._cuda_graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(self._cuda_graph):
+            self._compiled_data, self._compiled_len, self._compiled_state = self.forward(self._compiled_inputs[0].clone(), self._compiled_inputs[1].clone())
+
+
+        def replay(input_ids, input_lengths):
+            self._compiled_inputs[0].data.copy_(input_ids)
+            self._compiled_inputs[1].data.copy_(input_lengths)
+
+
+            self._cuda_graph.replay()
+
+            return self._compiled_data, self._compiled_len, self._compiled_state
+
+        return replay

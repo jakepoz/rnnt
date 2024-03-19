@@ -69,135 +69,107 @@ def train(cfg: DictConfig) -> None:
     optimizer = hydra.utils.instantiate(cfg.training.optimizer, params)
     lr_scheduler = hydra.utils.instantiate(cfg.training.lr_scheduler, optimizer, total_steps=total_steps)
 
-
     model.train()
 
+    with torch.autograd.anomaly_mode.set_detect_anomaly(True):
 
-    for epoch in range(cfg.training.num_epochs):
-        for step, batch in tqdm(
-            enumerate(train_dataloader), total=len(train_dataloader),
-        ):
-            mel_features = batch["mel_features"].to(device)
-            mel_feature_lens = batch["mel_feature_lens"].to(device)
-            input_ids = batch["input_ids"].to(device)
-            input_id_lens = batch["input_id_lens"].to(device)
+        for epoch in range(cfg.training.num_epochs):
+            for step, batch in tqdm(
+                enumerate(train_dataloader), total=len(train_dataloader),
+            ):
+                mel_features = batch["mel_features"].to(device)
+                mel_feature_lens = batch["mel_feature_lens"].to(device)
+                input_ids = batch["input_ids"].to(device)
+                input_id_lens = batch["input_id_lens"].to(device)
 
-            # Calculate the total size of the joint feature vector, which will probably cause OOMs if it exceed an amount
-            max_joint_size = torch.max(input_id_lens).item() * torch.max(mel_feature_lens).item()
-            print(f"Max joint feature size: {max_joint_size:,}")
+                prepended_input_ids = torch.cat([torch.zeros(input_ids.shape[0], 1, dtype=input_ids.dtype, device=device), input_ids], dim=1)
+                prepended_input_ids[:, 0] = cfg.blank_idx
 
-            if max_joint_size > cfg.training.max_joint_size:
-                print("Cutting batch in half, it's probably too large otherwise")
-                new_batch_size = mel_features.shape[0] // 2
-                mel_feature_lens = mel_feature_lens[:new_batch_size]
-                mel_features = mel_features[:new_batch_size, :, :torch.max(mel_feature_lens).item()]
-                input_id_lens = input_id_lens[:new_batch_size]
-                input_ids = input_ids[:new_batch_size, :torch.max(input_id_lens).item()]
-                
+                # Pad the input_ids for CUDA Graphs to work
+                prepended_input_ids = F.pad(prepended_input_ids, (0, cfg.training.max_input_id_length - prepended_input_ids.shape[1]), value=0)
+                mel_features_padded = F.pad(mel_features, (0, cfg.training.max_mel_length - mel_features.shape[2]), value=0)
 
+                loss = model.forward(mel_features_padded, mel_feature_lens, prepended_input_ids, input_id_lens + 1)
 
-            prepended_input_ids = torch.cat([torch.zeros(input_ids.shape[0], 1, dtype=input_ids.dtype, device=device), input_ids], dim=1)
-            prepended_input_ids[:, 0] = cfg.blank_idx
+                loss.backward()
+                total_norm = torch.nn.utils.clip_grad_norm_(params, cfg.training.clip_grad_norm)
 
-            # Use traditional predictor for decoder features
-            decoder_features, decoder_lengths, decoder_state = model.predictor(prepended_input_ids, input_id_lens + 1)
-            
-            # Generate the audio features, with gradients this time
-            audio_features = model.encoder(mel_features) # (N, C, L)
-            audio_features = audio_features.permute(0, 2, 1) # (N, L, C)
-            audio_feature_lens = model.encoder.calc_output_lens(mel_feature_lens)
+                completed_steps += 1
 
-            # Now, apply the joint model to each combination
-            joint_features = model.joint(audio_features, decoder_features)
+                # TensorBoard logging
+                writer.add_scalar("input_length/train", sum(input_id_lens.tolist()), completed_steps)
+                writer.add_scalar("loss/train", loss.item(), completed_steps)
+                writer.add_scalar("learning_rate", optimizer.param_groups[0]["lr"], completed_steps)
+                writer.add_scalar("total_norm/train", total_norm, completed_steps)
+                writer.add_scalar("epoch", epoch, completed_steps)
 
-            # Calculate the loss
-            loss = torchaudio.functional.rnnt_loss(logits=joint_features, 
-                                                   targets=input_ids.int(),
-                                                   logit_lengths=audio_feature_lens,
-                                                   target_lengths=input_id_lens.int(), 
-                                                   blank=-1,
-                                                   clamp=cfg.training.rnnt_grad_clamp,
-                                                   reduction="mean")
+                if completed_steps % cfg.training.log_steps == 0:
+                    with torch.no_grad():
+                        # Log gradient histograms for each layer
+                        for name, parameter in model.named_parameters():
+                            if parameter.grad is not None:
+                                writer.add_histogram(f"debug/{name}/gradients", parameter.grad, completed_steps)
+                                writer.add_histogram(f"debug/{name}/weights", parameter, completed_steps)
 
-            loss.backward()
-            total_norm = torch.nn.utils.clip_grad_norm_(params, cfg.training.clip_grad_norm)
+                                grad_norm = parameter.grad.norm(2).item()
+                                writer.add_scalar(f"debug/{name}/grad_norm", grad_norm, completed_steps)
 
-            completed_steps += 1
+                        writer.add_scalar("model_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.parameters()])), completed_steps)
+                        writer.add_scalar("joint_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.joint.parameters()])), completed_steps)
+                        writer.add_scalar("encoder_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.encoder.parameters()])), completed_steps)
+                        writer.add_scalar("predictor_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.predictor.parameters()])), completed_steps)
 
-            # TensorBoard logging
-            writer.add_scalar("input_length/train", sum(input_id_lens.tolist()), completed_steps)
-            writer.add_scalar("loss/train", loss.item(), completed_steps)
-            writer.add_scalar("learning_rate", optimizer.param_groups[0]["lr"], completed_steps)
-            writer.add_scalar("total_norm/train", total_norm, completed_steps)
-            writer.add_scalar("epoch", epoch, completed_steps)
-
-            if completed_steps % cfg.training.log_steps == 0:
-                with torch.no_grad():
-                    # Log gradient histograms for each layer
-                    for name, parameter in model.named_parameters():
-                        if parameter.grad is not None:
-                            writer.add_histogram(f"debug/{name}/gradients", parameter.grad, completed_steps)
-                            writer.add_histogram(f"debug/{name}/weights", parameter, completed_steps)
-
-                            grad_norm = parameter.grad.norm(2).item()
-                            writer.add_scalar(f"debug/{name}/grad_norm", grad_norm, completed_steps)
-
-                    writer.add_scalar("model_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.parameters()])), completed_steps)
-                    writer.add_scalar("joint_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.joint.parameters()])), completed_steps)
-                    writer.add_scalar("encoder_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.encoder.parameters()])), completed_steps)
-                    writer.add_scalar("predictor_grad_norm/train", np.sqrt(sum([torch.norm(p.grad).cpu().numpy()**2 for p in model.predictor.parameters()])), completed_steps)
-
-            # Actually do the step and zero out the gradients
-            optimizer.step()
-            lr_scheduler.step()
-            optimizer.zero_grad()
+                # Actually do the step and zero out the gradients
+                optimizer.step()
+                lr_scheduler.step()
+                optimizer.zero_grad()
 
 
-            # Do an eval step periodically
-            if completed_steps % cfg.training.eval_steps == 0 or completed_steps == total_steps:
-                model.eval()
+                # Do an eval step periodically
+                if completed_steps % cfg.training.eval_steps == 0 or completed_steps == total_steps:
+                    model.eval()
 
-                print("Starting eval...")
-                originals, decoded = [], []
+                    print("Starting eval...")
+                    originals, decoded = [], []
 
-                for step, batch in enumerate(eval_dataloader):
-                    mel_features = batch["mel_features"].to(device)
-                    mel_feature_lens = batch["mel_feature_lens"].to(device)
-                    input_ids = batch["input_ids"].to(device)
+                    for step, batch in enumerate(eval_dataloader):
+                        mel_features = batch["mel_features"].to(device)
+                        mel_feature_lens = batch["mel_feature_lens"].to(device)
+                        input_ids = batch["input_ids"].to(device)
+                        
+                        decoded_tokens = model.greedy_decode(mel_features, mel_feature_lens, max_length=batch["input_ids"].shape[1] * 2)
+                        decoded_text = tokenizer.decode(decoded_tokens)
+                        original_text = tokenizer.decode(input_ids[0].cpu().tolist())
+
+                        print(f"\nOriginal: {original_text}\nDecoded : {decoded_text}")
+
+                        writer.add_text(f"original_text_{step}/eval", original_text, completed_steps)
+                        writer.add_text(f"decoded_text_{step}/eval", decoded_text, completed_steps)
+
+                        originals.append(original_text)
+                        decoded.append(decoded_text)
+
+                        if step > cfg.data.eval.max_elements:
+                            break
+
+                    # Calculate overall wer using jiwer
+                    wer = jiwer.wer(originals, decoded)
+                    writer.add_scalar("wer/eval", wer, completed_steps)
                     
-                    decoded_tokens = model.greedy_decode(mel_features, mel_feature_lens, max_length=batch["input_ids"].shape[1] * 2)
-                    decoded_text = tokenizer.decode(decoded_tokens)
-                    original_text = tokenizer.decode(input_ids[0].cpu().tolist())
+                    print("Done with eval...")
+                    model.train()
 
-                    print(f"\nOriginal: {original_text}\nDecoded : {decoded_text}")
 
-                    writer.add_text(f"original_text_{step}/eval", original_text, completed_steps)
-                    writer.add_text(f"decoded_text_{step}/eval", decoded_text, completed_steps)
-
-                    originals.append(original_text)
-                    decoded.append(decoded_text)
-
-                    if step > cfg.data.eval.max_elements:
-                        break
-
-                # Calculate overall wer using jiwer
-                wer = jiwer.wer(originals, decoded)
-                writer.add_scalar("wer/eval", wer, completed_steps)
+                if completed_steps % cfg.training.checkpoint_steps == 0:
+                    save_model(model, optimizer, completed_steps, output_dir)
                 
-                print("Done with eval...")
-                model.train()
 
+        # Be sure to do one final save at the end
+        save_model(model, optimizer, completed_steps, output_dir)
+        writer.close()
 
-            if completed_steps % cfg.training.checkpoint_steps == 0:
-                save_model(model, optimizer, completed_steps, output_dir)
-            
-
-    # Be sure to do one final save at the end
-    save_model(model, optimizer, completed_steps, output_dir)
-    writer.close()
-
-    # Returns last wer
-    return wer
+        # Returns last wer
+        return wer
 
 if __name__ == "__main__":
     train()

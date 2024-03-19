@@ -1,4 +1,5 @@
 import torch
+import torchaudio
 
 
 # Just a simple container for all the submodels, so that you can more easily save and load the entire model
@@ -12,6 +13,35 @@ class RNNTModel(torch.nn.Module):
     @property
     def device(self):
         return next(self.parameters()).device
+    
+    def forward(self, mel_features, mel_feature_lens, input_ids, input_id_lens):
+        decoder_features, decoder_lengths, decoder_state = self.predictor(input_ids, input_id_lens)
+
+        # Unpad the decoder features not to waste memory with the joint network
+        decoder_features = decoder_features[:, :torch.max(decoder_lengths).item(), :]
+
+        # Generate the audio features
+        audio_features = self.encoder(mel_features) # (N, C, L)
+        audio_features = audio_features.permute(0, 2, 1) # (N, L, C)
+        audio_feature_lens = self.encoder.calc_output_lens(mel_feature_lens)
+
+        # Unpad the audio features too
+        audio_features = audio_features[:, :torch.max(audio_feature_lens).item(), :]
+
+        # Now, apply the joint model to each combination
+        joint_features = self.joint(audio_features, decoder_features)
+
+        # Calculate the loss
+        loss = torchaudio.functional.rnnt_loss(logits=joint_features, 
+                                            targets=input_ids.int(),
+                                            logit_lengths=audio_feature_lens,
+                                            target_lengths=input_id_lens.int(), 
+                                            blank=-1,
+                                            clamp=-1,
+                                            reduction="mean")
+        
+        return loss
+    
 
     @torch.no_grad()
     def greedy_decode(self, mel_features: torch.Tensor, mel_feature_lens: torch.Tensor, max_length: int = 200) -> list[int]:
