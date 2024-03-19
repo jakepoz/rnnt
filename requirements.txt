@@ -23,3 +23,8 @@ jiwer
 
 # For connecting to optuna postgres
 psycopg2-binary
+
+# For exporting to onnx
+onnx
+onnxscript
+onnxsim

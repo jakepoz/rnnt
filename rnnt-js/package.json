@@ -1,0 +1,20 @@
+{
+  "name": "tensorflowjs-sample-project",
+  "version": "1.0.0",
+  "description": "A simple TensorFlow.js sample project",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@tensorflow/tfjs": "^3.0.0"
+  },
+  "devDependencies": {
+    "vite": "^2.0.0"
+  }
+}

@@ -17,7 +17,17 @@
             "request": "launch",
             "module": "rnnt.eval",
             "args": [
-                "+checkpoint=/home/jake/rnnt/experiments/basic_char/run-42/checkpoint_step_140621.pt"
+                "+checkpoint=/home/jake/rnnt/experiments/basic_char/run-7/checkpoint_step_140621.pt"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "Python: ConvertJS",
+            "type": "python",
+            "request": "launch",
+            "module": "rnnt.convertjs",
+            "args": [
+                "+checkpoint=/home/jake/rnnt/experiments/basic_char/run-7/checkpoint_step_140621.pt"
             ],
             "justMyCode": true
         },
