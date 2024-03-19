@@ -28,6 +28,7 @@ def objective(trial):
         except Exception as e:
             print(f"Exception during training: {e}")
             print(traceback.format_exc())
+            trial.set_user_attr("exception", str(e))
             wer = float('inf')
 
     # Optuna aims to minimize the objective, so if you have a metric that should be maximized, 
