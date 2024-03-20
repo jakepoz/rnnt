@@ -5,6 +5,8 @@ import torch
 
 from typing import List, Optional, Tuple
 
+from rnnt.causalconv import CausalConv1d
+
 
 class _CustomLSTM(torch.nn.Module):
     r"""Custom long-short-term memory (LSTM) block that applies layer normalization
@@ -182,3 +184,46 @@ class LSTMPredictor(torch.nn.Module):
         linear_out = self.linear(lstm_out)
         output_layer_norm_out = self.output_layer_norm(linear_out)
         return output_layer_norm_out.permute(1, 0, 2), lengths, state_out
+
+
+class ConvPredictor(torch.nn.Module):
+    def __init__(
+        self,
+        num_symbols: int,
+        output_dim: int,
+        symbol_embedding_dim: int,
+        dropout: float,
+    ) -> None:
+        super().__init__()
+        self.embedding = torch.nn.Embedding(num_symbols, symbol_embedding_dim)
+        self.input_layer_norm = torch.nn.LayerNorm(symbol_embedding_dim)
+       
+        self.conv1 = CausalConv1d(symbol_embedding_dim, symbol_embedding_dim, kernel_size=3, stride=1, dilation=1)
+        self.conv2 = CausalConv1d(symbol_embedding_dim, symbol_embedding_dim, kernel_size=5, stride=1, dilation=1)
+
+        self.linear = torch.nn.Linear(symbol_embedding_dim, output_dim)
+        self.output_layer_norm = torch.nn.LayerNorm(output_dim)
+
+        self.dropout = torch.nn.Dropout(p=dropout)
+
+    def forward(self, input, input_lengths):
+        x = input
+
+        x = self.embedding(x)
+        x = self.input_layer_norm(x)
+
+        x = x.permute(0, 2, 1)
+        x = self.conv1(x)
+        x = torch.nn.functional.gelu(x)
+        x = self.dropout(x)
+
+        x = self.conv2(x)
+        x = torch.nn.functional.gelu(x)
+        x = self.dropout(x)
+
+        x = x.permute(0, 2, 1)
+
+        x = self.linear(x)
+        x = self.output_layer_norm(x)
+
+        return x, input_lengths

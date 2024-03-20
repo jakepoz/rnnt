@@ -100,7 +100,8 @@ def train(cfg: DictConfig) -> None:
             prepended_input_ids[:, 0] = cfg.blank_idx
 
             # Use traditional predictor for decoder features
-            decoder_features, decoder_lengths, decoder_state = model.predictor(prepended_input_ids, input_id_lens + 1)
+            decoder_result = model.predictor(prepended_input_ids, input_id_lens + 1)
+            decoder_features = decoder_result[0]
             
             # Generate the audio features, with gradients this time
             audio_features = model.encoder(mel_features) # (N, C, L)

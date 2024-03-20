@@ -22,15 +22,11 @@ featurizer:
   invstddev: 0.25
 
 predictor:
- _target_: rnnt.predictor.LSTMPredictor
+ _target_: rnnt.predictor.ConvPredictor
  num_symbols: ${num_total_symbols} 
  output_dim: 1024
  symbol_embedding_dim: 512
- num_lstm_layers: 3
- lstm_layer_norm: True
- lstm_hidden_dim: ${predictor.symbol_embedding_dim}
- lstm_layer_norm_epsilon: 1e-3
- lstm_dropout: 0.3
+ dropout: 0.3
 
 encoder:
   _target_: rnnt.jasper.AudioEncoder
