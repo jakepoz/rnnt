@@ -206,7 +206,7 @@ class ConvPredictor(torch.nn.Module):
 
         self.dropout = torch.nn.Dropout(p=dropout)
 
-    def forward(self, input, input_lengths):
+    def forward(self, input):
         x = input
 
         x = self.embedding(x)
@@ -226,4 +226,4 @@ class ConvPredictor(torch.nn.Module):
         x = self.linear(x)
         x = self.output_layer_norm(x)
 
-        return x, input_lengths
+        return x

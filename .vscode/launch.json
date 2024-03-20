@@ -26,12 +26,12 @@
             "justMyCode": true
         },
         {
-            "name": "Python: ConvertJS",
+            "name": "Python: Export onnx",
             "type": "python",
             "request": "launch",
-            "module": "rnnt.convertjs",
+            "module": "rnnt.export_onnx",
             "args": [
-                "/home/jake/rnnt/experiments/basic_char/run-7/checkpoint_step_140621.pt",
+                "/home/jake/rnnt/experiments/basic_char/run-64/checkpoint_step_40000.pt",
             ],
             "justMyCode": true
         },

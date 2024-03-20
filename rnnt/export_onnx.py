@@ -36,25 +36,26 @@ def convert(checkpoint, config_path=None, export_dir="export"):
     
     example_mel_features = torch.randn(1, cfg.featurizer.n_mels, 1000)
     encoder_scripted = torch.jit.script(model.encoder)
-    torch.onnx.export(encoder_scripted, example_mel_features, os.path.join(export_dir, "encoder.onnx"), verbose=True)
+    torch.onnx.export(encoder_scripted, example_mel_features, os.path.join(export_dir, "encoder.onnx"), verbose=True,
+                      dynamic_axes={"mel_features": {2: "frames"}},
+                      input_names=["mel_features"],
+                      output_names=["audio_features"])
 
-    # TODO Export a single iteration of the predictor LSTM, later we can tune this
-    example_tokens = torch.ones(1, 1, dtype=torch.long)
-    example_lens = torch.ones(1, dtype=torch.long)
-    example_hidden = []
+    example_tokens = torch.ones(1, 10, dtype=torch.long)
 
-    for i in range(cfg.predictor.num_lstm_layers):
-        example_hidden.append([torch.zeros(1, cfg.predictor.lstm_hidden_dim), torch.zeros(1, cfg.predictor.lstm_hidden_dim)])
-
-    # Gotta trace this otherwise it crashes randomly
-    #predictor_scripted = torch.jit.script(model.predictor)
-    torch.onnx.export(model.predictor, (example_tokens, example_lens, example_hidden), os.path.join(export_dir, "predictor.onnx"), verbose=True)
+    predictor_scripted = torch.jit.script(model.predictor)
+    torch.onnx.export(predictor_scripted, example_tokens, os.path.join(export_dir, "predictor.onnx"), verbose=True,
+                      dynamic_axes={"tokens": {1: "num_tokens"}},
+                      input_names=["tokens"],
+                      output_names=["text_features"])
 
 
     joint_scripted = torch.jit.script(model.joint)
     example_audio_frame = torch.randn(1, 1, cfg.encoder.output_features)
     example_text_frame = torch.randn(1, 1, cfg.predictor.output_dim)
-    torch.onnx.export(joint_scripted, (example_audio_frame, example_text_frame), os.path.join(export_dir, "joint.onnx"), verbose=True)
+    torch.onnx.export(joint_scripted, (example_audio_frame, example_text_frame), os.path.join(export_dir, "joint.onnx"), verbose=True,
+                      input_names=["audio_frame", "text_frame"],
+                      output_names=["logits"])
 
     # Output sentence piece data in a simple json format for now
     with open(os.path.join(export_dir, "tokenizer.json"), "w") as f:
