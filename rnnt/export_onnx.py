@@ -39,14 +39,15 @@ def convert(checkpoint, config_path=None, export_dir="export"):
     torch.onnx.export(encoder_scripted, example_mel_features, os.path.join(export_dir, "encoder.onnx"), verbose=True)
 
     # TODO Export a single iteration of the predictor LSTM, later we can tune this
-    example_tokens = torch.zeros(1, 1, dtype=torch.long)
-    example_lens = torch.zeros(1, 1, dtype=torch.long)
+    example_tokens = torch.ones(1, 1, dtype=torch.long)
+    example_lens = torch.ones(1, dtype=torch.long)
     example_hidden = []
 
     for i in range(cfg.predictor.num_lstm_layers):
         example_hidden.append([torch.zeros(1, cfg.predictor.lstm_hidden_dim), torch.zeros(1, cfg.predictor.lstm_hidden_dim)])
 
     # Gotta trace this otherwise it crashes randomly
+    #predictor_scripted = torch.jit.script(model.predictor)
     torch.onnx.export(model.predictor, (example_tokens, example_lens, example_hidden), os.path.join(export_dir, "predictor.onnx"), verbose=True)
 
 

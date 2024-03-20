@@ -9,6 +9,10 @@
             "type": "python",
             "request": "launch",
             "module": "rnnt.train",
+            "args": [
+                "--config-name", "basic_sp_conv.yaml",
+                "training.checkpoint_steps=20000",
+            ],
             "justMyCode": true
         },
         {
@@ -27,7 +31,7 @@
             "request": "launch",
             "module": "rnnt.convertjs",
             "args": [
-                "+checkpoint=/home/jake/rnnt/experiments/basic_char/run-7/checkpoint_step_140621.pt"
+                "/home/jake/rnnt/experiments/basic_char/run-7/checkpoint_step_140621.pt",
             ],
             "justMyCode": true
         },
