@@ -27,7 +27,7 @@ class JointNetwork(torch.nn.Module):
 
         joint_frames = audio_frames + text_frames
 
-        joint_frames = F.tanh(joint_frames)
+        joint_frames = self.activation(joint_frames)
 
         return self.joint_ln(joint_frames)
     
