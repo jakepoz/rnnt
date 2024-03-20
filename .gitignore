@@ -4,6 +4,7 @@ experiments-old/
 test/
 export/
 rnnt-js/node_modules
+rnnt-js/models
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

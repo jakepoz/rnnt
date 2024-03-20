@@ -7,7 +7,7 @@ async function loadModelAndPredict() {
 
     const model = await tf.loadGraphModel('tfjs_model/model.json');
 
-    const inputTensor = tf.randomNormal([1, 1000, 80]);
+    const inputTensor = tf.zeros([1, 1000, 80]);
 
     // Use the model to make a prediction
     let result = model.predict(inputTensor);
