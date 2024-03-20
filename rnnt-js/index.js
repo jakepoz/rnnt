@@ -32,7 +32,8 @@ async function loadModelAndPredict() {
     const testMelFeatures = tf.zeros([1, 1000, 80]);
     const testTextTokens = tf.tensor2d([[0]], [1, 1], 'int32');
 
-
+    const testJoinerInput1 = tf.zeros([1, 1024, 1]);
+    const testJoinerInput2 = tf.zeros([1, 1024, 1]);
 
     // Time the prediction in the second run
     console.time('encoder');
@@ -49,6 +50,12 @@ async function loadModelAndPredict() {
     console.log(testTextFeatures);
     console.log(testTextFeatures.shape);
     console.timeEnd('predictor');
+
+    console.time('joint');
+    let testLogits = joint.predict([testJoinerInput1, testJoinerInput2]);
+    console.log(testLogits);
+    console.log(testLogits.shape);
+    console.timeEnd('joint');
 }
 
 // Call the function to load the model and make a prediction

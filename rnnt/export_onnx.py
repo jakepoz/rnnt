@@ -33,6 +33,7 @@ def convert(checkpoint, config_path=None, export_dir="export"):
                       hydra.utils.instantiate(cfg["joint"]))
     
     model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
     
     example_mel_features = torch.randn(1, cfg.featurizer.n_mels, 1000)
     encoder_scripted = torch.jit.script(model.encoder)

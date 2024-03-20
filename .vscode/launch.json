@@ -21,7 +21,7 @@
             "request": "launch",
             "module": "rnnt.eval",
             "args": [
-                "+checkpoint=/home/jake/rnnt/experiments/basic_char/run-7/checkpoint_step_140621.pt"
+                "/home/jake/rnnt/experiments/basic_char/run-64/checkpoint_step_40000.pt",
             ],
             "justMyCode": true
         },

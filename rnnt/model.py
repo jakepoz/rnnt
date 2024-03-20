@@ -75,7 +75,7 @@ class RNNTModel(torch.nn.Module):
         max_outputs_per_step = 10
 
         input_ids = torch.tensor([tokens], dtype=torch.int64, device=self.device)
-        predictor_features, _ = self.predictor(input_ids, torch.tensor([len(tokens)], dtype=torch.int64, device=self.device))
+        predictor_features = self.predictor(input_ids)
 
         while cur_audio_time < max_audio_time and len(tokens) < max_length:
             
@@ -93,7 +93,7 @@ class RNNTModel(torch.nn.Module):
 
                 # Update the predictor features, does the full rerun of the conv net for now, later it can be optimized
                 input_ids = torch.tensor([tokens], dtype=torch.int64, device=self.device)
-                predictor_features, _ = self.predictor(input_ids, torch.tensor([len(tokens)], dtype=torch.int64, device=self.device))
+                predictor_features = self.predictor(input_ids)
 
                 cur_outputs_per_step += 1
 

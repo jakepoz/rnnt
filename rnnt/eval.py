@@ -1,9 +1,12 @@
 import torch
 import torch.nn.functional as F
 import torchaudio
+import os
+import yaml
 import hydra
 import time
 import jiwer
+import argparse
 import numpy as np
 import sentencepiece as spm
 from tqdm import tqdm
@@ -16,11 +19,17 @@ from rnnt.model import RNNTModel
 from rnnt.util import save_model, get_output_dir
 
 
-@hydra.main(version_base=None, config_path="config", config_name="basic_sp.yaml")
-def eval(cfg: DictConfig) -> None:
+
+def eval(checkpoint, config_path=None) -> None:
     device = torch.device("cuda")
 
-    checkpoint = torch.load(cfg.checkpoint, map_location="cpu")
+    if config_path is None:
+        config_path = os.path.join(os.path.dirname(checkpoint), "config.yaml")
+
+    with open(config_path, "r") as f:
+        cfg = OmegaConf.create(yaml.safe_load(f))
+
+    checkpoint = torch.load(checkpoint, map_location="cpu")
 
     tokenizer = hydra.utils.instantiate(cfg.tokenizer)
 
@@ -52,8 +61,9 @@ def eval(cfg: DictConfig) -> None:
     print(f"Number of encoder parameters: {sum(p.numel() for p in model.encoder.parameters()):,}")
     print(f"Number of joint parameters: {sum(p.numel() for p in model.joint.parameters()):,}")
 
-
     model.eval()
+
+    
 
     print("Starting eval...")
     originals, decoded = [], []
@@ -88,5 +98,11 @@ def eval(cfg: DictConfig) -> None:
     # Returns last wer
     return wer
 
+
 if __name__ == "__main__":
-    eval()
+    parser = argparse.ArgumentParser(description="Calculate WER from a model and run tests on it")
+    parser.add_argument("checkpoint", type=str, help="Path to the checkpoint file")
+    parser.add_argument("--config", type=str, default=None, help="Path to the config.yaml file (optional)")
+    args = parser.parse_args()
+
+    eval(args.checkpoint, args.config)
