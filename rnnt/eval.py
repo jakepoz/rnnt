@@ -16,7 +16,7 @@ from datasets import concatenate_datasets
 from torch.utils.tensorboard import SummaryWriter
 
 from rnnt.model import RNNTModel
-from rnnt.util import save_model, get_output_dir
+from rnnt.util import save_tensor_json
 
 
 
@@ -65,12 +65,17 @@ def eval(checkpoint, config_path=None) -> None:
 
     print("Model loaded...")
     sample_mel_features = torch.zeros(1, cfg.featurizer.n_mels, 1000).to(device)
-    print(model.encoder(sample_mel_features))
+    sample_audio_features = model.encoder(sample_mel_features).permute(0, 2, 1)
 
-    sample_text_features = torch.tensor([[0, 1, 2, 3, 4]]).to(device)
-    print(model.predictor(sample_text_features))
+    sample_tokens = torch.tensor([[0, 1, 2, 3, 4]]).to(device)
+    sample_text_features = model.predictor(sample_tokens)
 
-    return
+    sample_joint1 = torch.zeros(1, 1, cfg.encoder.output_features).to(device)
+    sample_joint2 = torch.zeros(1, 1, cfg.encoder.output_features).to(device)
+
+    sample_joint = model.joint.forward(sample_joint1, sample_joint2)
+    print(sample_joint)
+
     print("Starting eval...")
     originals, decoded = [], []
 
@@ -86,6 +91,11 @@ def eval(checkpoint, config_path=None) -> None:
         original_text = tokenizer.decode(input_ids[0].cpu().tolist())
 
         print(f"\nOriginal: {original_text}\nDecoded : {decoded_text}")
+
+        # Grab some sample mels to test with on the tfjs side
+        # if step == 0:
+        #     with open("samplemels.json", "w") as f:
+        #         f.write(save_tensor_json(mel_features[0]))
 
         originals.append(original_text)
         decoded.append(decoded_text)

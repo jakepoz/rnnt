@@ -1,5 +1,7 @@
 import torch
 import os
+import json
+import base64
 from omegaconf import DictConfig
 
 def save_model(model, optimizer, completed_steps, output_dir):
@@ -8,6 +10,17 @@ def save_model(model, optimizer, completed_steps, output_dir):
         "optimizer_state_dict": optimizer.state_dict(),
         "completed_steps": completed_steps,
     }, os.path.join(output_dir, f"checkpoint_step_{completed_steps}.pt"))
+
+
+def save_tensor_json(tensor: torch.Tensor) -> str:    
+    assert tensor.dtype in [torch.float32, torch.int32]
+    tensor = tensor.detach().cpu().numpy()
+
+    return json.dumps({
+        "dtype": str(tensor.dtype),
+        "shape": tensor.shape,
+        "data": base64.b64encode(tensor.tobytes()).decode("utf-8"),
+    })
 
 
 def get_output_dir(cfg: DictConfig) -> str:

@@ -2,5 +2,8 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  assetsInclude: ['models/**/*.bin']
+  assetsInclude: [
+    'models/**/*.bin',
+    ''
+  ]
 });

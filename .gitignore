@@ -6,6 +6,7 @@ export/
 rnnt-js/node_modules
 rnnt-js/models
 rnnt-js/public/models
+rnnt-js/public/samplemels.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

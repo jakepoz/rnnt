@@ -21,7 +21,7 @@
             "request": "launch",
             "module": "rnnt.eval",
             "args": [
-                "/home/jake/rnnt/experiments/basic_char/run-64/checkpoint_step_40000.pt",
+                "/home/jake/rnnt/experiments-old-2/basic_char/run-64/checkpoint_step_40000.pt",
             ],
             "justMyCode": true
         },
@@ -31,7 +31,7 @@
             "request": "launch",
             "module": "rnnt.export_onnx",
             "args": [
-                "/home/jake/rnnt/experiments/basic_char/run-64/checkpoint_step_40000.pt",
+                "/home/jake/rnnt/experiments-old-2/basic_char/run-64/checkpoint_step_40000.pt",
             ],
             "justMyCode": true
         },
