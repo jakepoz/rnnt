@@ -1,6 +1,6 @@
 outputs/
 experiments/
-experiments-old/
+experiments-*/
 test/
 export/
 rnnt-js/node_modules

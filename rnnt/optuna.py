@@ -5,22 +5,20 @@ from hydra import compose, initialize
 from rnnt.train import train
 
 def objective(trial):
-    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
-    batch_size = trial.suggest_categorical("batch_size", [2, 4, 8])
-    norm_type = trial.suggest_categorical("norm_type", ["batch", "instance", "instance_affine"])
+    beta0_inv = trial.suggest_float("beta0_inv", 1e-6, 0.2, log=True)
+    beta1_inv = trial.suggest_float("beta1_inv", 1e-6, 1.0, log=True)
 
+    # beta1_inv == 0.0 means beta1 = 1.0
+    # beta1_inv == 0.5, beta1 = halfway between beta0 and 1.0, etc.
+    beta0 = 1.0 - beta0_inv
+    beta1 = beta0 + (1.0 - beta0) * (1.0 - beta1_inv)
 
     with initialize(config_path="config"):
         # Load your existing configuration
-        cfg = compose(config_name="basic_sp.yaml")
+        cfg = compose(config_name="basic_sp_conv.yaml")
         
         # Update the configuration with the suggested hyperparameters
-        cfg.training.optimizer.lr = learning_rate
-        cfg.training.pergpu_minibatch_size = batch_size
-        cfg.encoder.norm_type = norm_type
-
-        for block in cfg.encoder.blocks:
-            block.norm_type = norm_type
+        cfg.training.optimizer.betas = [beta0, beta1]
 
         # Run training with the current set of hyperparameters
         try:
@@ -39,7 +37,7 @@ def objective(trial):
 if __name__ == "__main__":
 
 
-    study = optuna.create_study(study_name="single_epoch_batch_and_norms", 
+    study = optuna.create_study(study_name="single_epoch_conv_beta_study", 
                                 direction="minimize",
                                 storage= optuna.storages.RDBStorage(url="postgresql://optuna_user:password@localhost/optuna_db"),
                                 load_if_exists=True,
