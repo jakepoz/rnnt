@@ -37,7 +37,7 @@ def objective(trial):
 if __name__ == "__main__":
 
 
-    study = optuna.create_study(study_name="single_epoch_conv_beta_study", 
+    study = optuna.create_study(study_name="single_epoch_conv_beta_study2", 
                                 direction="minimize",
                                 storage= optuna.storages.RDBStorage(url="postgresql://optuna_user:password@localhost/optuna_db"),
                                 load_if_exists=True,
