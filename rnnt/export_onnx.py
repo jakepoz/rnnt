@@ -51,7 +51,15 @@ def convert(checkpoint, config_path=None, export_dir="export"):
                       output_names=["text_features"])
 
 
-    joint_scripted = torch.jit.script(model.joint)
+    class SingleForwardWrapper(torch.nn.Module):
+        def __init__(self, joint_network):
+            super().__init__()
+            self.joint_network = joint_network
+        
+        def forward(self, audio_frame, text_frame):
+            return self.joint_network.single_forward(audio_frame, text_frame)
+
+    joint_scripted = torch.jit.script(SingleForwardWrapper(model.joint))
     example_audio_frame = torch.randn(1, 1, cfg.encoder.output_features)
     example_text_frame = torch.randn(1, 1, cfg.predictor.output_dim)
     torch.onnx.export(joint_scripted, (example_audio_frame, example_text_frame), os.path.join(export_dir, "joint.onnx"), verbose=True,

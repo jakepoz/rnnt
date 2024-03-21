@@ -21,7 +21,7 @@ from rnnt.util import save_tensor_json
 
 
 def eval(checkpoint, config_path=None) -> None:
-    device = torch.device("cuda")
+    device = torch.device("cpu")
 
     if config_path is None:
         config_path = os.path.join(os.path.dirname(checkpoint), "config.yaml")
@@ -107,7 +107,8 @@ def eval(checkpoint, config_path=None) -> None:
     wer = jiwer.wer(originals, decoded)
 
     print(f"Done with eval... WER = {wer:.3f}")
-    print(f"Time per sample: {(time.perf_counter() - start_time) / len(originals):.3f} s")
+    print(f"Time taken: {time.perf_counter() - start_time:.3f}s")
+    print(f"Time per sample: {(time.perf_counter() - start_time) / len(originals):.3f}s")
     model.train()
 
       

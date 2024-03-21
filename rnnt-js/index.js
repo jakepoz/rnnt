@@ -1,5 +1,11 @@
 import { base64 } from "rfc4648";
 import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-backend-webgpu';
+import '@tensorflow/tfjs-backend-wasm';
+
+import { setThreadsCount, getThreadsCount } from '@tensorflow/tfjs-backend-wasm';
+
+
 
 async function loadTensor(url) {
     try {
@@ -42,30 +48,40 @@ function greedyDecode(audioFeatures, encoder, predictor, joint, max_length = 200
     // Convert tokens to a tensor
     let input_ids = tf.tensor2d([tokens], [1, tokens.length], 'int32');
 
+    let allAudioSlices = tf.split(audioFeatures, audioFeatures.shape[1], 1);
+
+    // Get the latest token for prediction
+    let predictor_feature_slice = predictor.predict(input_ids);
+    predictor_feature_slice = predictor_feature_slice.slice([0, predictor_feature_slice.shape[1] - 1, 0], [1, 1, predictor_feature_slice.shape[2]]);
+
+
     while (cur_audio_time < max_audio_time && tokens.length < max_length) {
         // Extract a slice of audio features for the current time step
-        const audio_feature_slice = audioFeatures.slice([0, cur_audio_time, 0], [1, 1, audioFeatures.shape[2]]);
+        //const audio_feature_slice = audioFeatures.slice([0, cur_audio_time, 0], [1, 1, audioFeatures.shape[2]]);
+        const audio_feature_slice = allAudioSlices[cur_audio_time];
   
-        // Get the latest token for prediction
-        let predictor_feature_slice = predictor.predict(input_ids);
-        predictor_feature_slice = predictor_feature_slice.slice([0, predictor_feature_slice.shape[1] - 1, 0], [1, 1, predictor_feature_slice.shape[2]]);
-
         // Compute joint features for the current audio and predictor features
         //const joint_features = joint.predict([audio_feature_slice, predictor_feature_slice]);
-        const joint_features = joint.predict([predictor_feature_slice, audio_feature_slice]);
+        const joint_features = joint.predict({text_frame: predictor_feature_slice, audio_frame: audio_feature_slice});
         const joint_logits = joint_features.squeeze([0]);
-
 
         // Get the most likely token index
         const token_idx = joint_logits.argMax(-1).dataSync()[0];
+        //const token_idx = tf.argMax(joint_logits, -1).bufferSync().values[0];
+        //const token_idx = joint_logits.argMax(-1)[0];
 
         if (token_idx === blank_idx || cur_outputs_per_step >= max_outputs_per_step) { // Assuming 0 is the blank token index
             cur_audio_time += 1;
             cur_outputs_per_step = 0;
         } else {
             tokens.push(token_idx);
+
             // Update input_ids for the next prediction
             input_ids = tf.tensor2d([tokens], [1, tokens.length], 'int32');
+
+            predictor_feature_slice = predictor.predict(input_ids);
+            predictor_feature_slice = predictor_feature_slice.slice([0, predictor_feature_slice.shape[1] - 1, 0], [1, 1, predictor_feature_slice.shape[2]]);
+        
             cur_outputs_per_step += 1;
         }
     }
@@ -93,8 +109,13 @@ function decodeTokens(tokenIds, tokenizer) {
 }
 
 async function loadModelAndPredict() {
-    tf.setBackend('webgl');
     console.log("tf backend: ", tf.getBackend());
+    console.log("tf version: ", tf.version);
+    console.log("thread count: ", getThreadsCount());
+
+    // tf.env().reset();
+    //tf.env().set("WEBGL_USE_SHAPES_UNIFORMS", true);    
+    //tf.env().set("WEBGPU_DEFERRED_SUBMIT_BATCH_SIZE", 0);
 
     tf.registerOp("_MklLayerNorm", (node) => {
         const [ x, scale, offset ] = node.inputs;
@@ -123,6 +144,15 @@ async function loadModelAndPredict() {
     const testJoinerInput1 = tf.zeros([1, 1, 1024]);
     const testJoinerInput2 = tf.zeros([1, 1, 1024]);
 
+    // tf.enableDebugMode();
+
+    // let testLogitsz = joint.predict({
+    //     audio_frame: testJoinerInput1, 
+    //     text_frame: testJoinerInput2
+    // });
+    // testLogitsz.print();
+
+    console.log(tf.env().flags);
 
     //Warmup all the networks once 
     console.log("warming up")
@@ -131,26 +161,31 @@ async function loadModelAndPredict() {
     joint.predict([testJoinerInput1, testJoinerInput2]);
     console.log("done warming up");
 
+
+
     // Now time them
     console.time('encoder');
     let testAudioFeatures = encoder.predict(testMelFeatures);
-    testAudioFeatures.print();
     console.log(testAudioFeatures);
     console.log(testAudioFeatures.shape)
     console.timeEnd('encoder');
 
+
     console.time('predictor');
     let testTextFeatures = predictor.predict(testTextTokens);
-    testTextFeatures.print();
     console.log(testTextFeatures);
     console.log(testTextFeatures.shape);
     console.timeEnd('predictor');
 
     console.time('joint');
-    let testLogits = joint.predict([testJoinerInput1, testJoinerInput2]);
-    testLogits.print();
-    console.log(testLogits);
-    console.log(testLogits.shape);
+    for (let i = 0; i < 100; i++) {
+        let testLogits = joint.predict({
+            audio_frame: testJoinerInput1, 
+            text_frame: testJoinerInput2
+        });
+        // console.log(testLogits);
+        // console.log(testLogits.shape);
+    }
     console.timeEnd('joint');
 
     // Now load some sample mel data and attempt to decode it
@@ -164,9 +199,14 @@ async function loadModelAndPredict() {
     const audioFeatures = encoder.predict(melData);
     console.log("audioFeatures.shape: ", audioFeatures.shape);
 
+    console.time('greedyDecode');
     let result = greedyDecode(audioFeatures, encoder, predictor, joint);
     console.log(decodeTokens(result, tokenizer));
+    console.timeEnd('greedyDecode');
+
+    console.table(tf.memory());
 }
 
-// Call the function to load the model and make a prediction
-loadModelAndPredict();
+setThreadsCount(4);
+console.log(tf.env().flags);
+tf.setBackend('wasm').then(() => loadModelAndPredict());
