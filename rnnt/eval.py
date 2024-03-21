@@ -63,8 +63,14 @@ def eval(checkpoint, config_path=None) -> None:
 
     model.eval()
 
-    
+    print("Model loaded...")
+    sample_mel_features = torch.zeros(1, cfg.featurizer.n_mels, 1000).to(device)
+    print(model.encoder(sample_mel_features))
 
+    sample_text_features = torch.tensor([[0, 1, 2, 3, 4]]).to(device)
+    print(model.predictor(sample_text_features))
+
+    return
     print("Starting eval...")
     originals, decoded = [], []
 

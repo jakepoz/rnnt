@@ -5,6 +5,7 @@ test/
 export/
 rnnt-js/node_modules
 rnnt-js/models
+rnnt-js/public/models
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

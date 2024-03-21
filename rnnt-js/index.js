@@ -30,23 +30,33 @@ async function loadModelAndPredict() {
     const joint = await tf.loadGraphModel('models/joint/model.json');
 
     const testMelFeatures = tf.zeros([1, 1000, 80]);
-    const testTextTokens = tf.tensor2d([[0]], [1, 1], 'int32');
+    const testTextTokens = tf.tensor2d([[0, 1, 2, 3, 4]], [1, 5], 'int32');
 
     const testJoinerInput1 = tf.zeros([1, 1024, 1]);
     const testJoinerInput2 = tf.zeros([1, 1024, 1]);
 
-    // Time the prediction in the second run
-    console.time('encoder');
+     let prof = await tf.profile(async () => {
+        result =  encoder.predict(testMelFeatures);
+    });
 
-    //tf.enableDebugMode();
+    //Warmup all the networks once 
+    console.log("warming up")
+    encoder.predict(testMelFeatures);
+    predictor.predict(testTextTokens);
+    joint.predict([testJoinerInput1, testJoinerInput2]);
+    console.log("done warming up");
+
+    // Now time them
+    console.time('encoder');
     let testAudioFeatures = encoder.predict(testMelFeatures);
+    testAudioFeatures.print();
     console.log(testAudioFeatures);
     console.log(testAudioFeatures.shape)
     console.timeEnd('encoder');
 
-
     console.time('predictor');
     let testTextFeatures = predictor.predict(testTextTokens);
+    testTextFeatures.print();
     console.log(testTextFeatures);
     console.log(testTextFeatures.shape);
     console.timeEnd('predictor');
