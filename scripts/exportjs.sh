@@ -12,9 +12,10 @@ python -m rnnt.export_onnx $checkpoint
 pushd export
 source activate onnx2tf
 
-# onnx2tf -i encoder.onnx -b1 -osd -o saved_model_encoder
+onnx2tf -i encoder.onnx -b1 -osd -o saved_model_encoder
 
-# onnx2tf -i predictor.onnx -b1 -osd -o saved_model_predictor
+onnx2tf -i predictor.onnx -b1 -osd -o saved_model_predictor
+
 # Have to keep the input shapes, because otherwise it thinks it's doing a NCW -> NWC conversion
 # Also passing -coion to keep input output names the same, otherwise they can get reordered and it's a pain to debug why the joiner doesn't work anymore
 onnx2tf -i joint.onnx -b1 -osd -kat "audio_frame" "text_frame" -coion -o saved_model_joint
@@ -31,6 +32,5 @@ tensorflowjs_converter --input_format=tf_saved_model --output_format=tfjs_graph_
 
 # Skipping op check because LayerNorm is not supported, but maybe there is a better way to handle this
 tensorflowjs_converter --input_format=tf_saved_model --output_format=tfjs_graph_model --signature_name=serving_default --saved_model_tags=serve --skip_op_check ../../../export/saved_model_predictor predictor
-
 
 tensorflowjs_converter --input_format=tf_saved_model --output_format=tfjs_graph_model --signature_name=serving_default --saved_model_tags=serve  ../../../export/saved_model_joint joint

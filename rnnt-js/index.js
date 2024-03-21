@@ -45,18 +45,16 @@ function greedyDecode(audioFeatures, encoder, predictor, joint, max_length = 200
     while (cur_audio_time < max_audio_time && tokens.length < max_length) {
         // Extract a slice of audio features for the current time step
         const audio_feature_slice = audioFeatures.slice([0, cur_audio_time, 0], [1, 1, audioFeatures.shape[2]]);
-        audio_feature_slice.print();
-
+  
         // Get the latest token for prediction
         let predictor_feature_slice = predictor.predict(input_ids);
         predictor_feature_slice = predictor_feature_slice.slice([0, predictor_feature_slice.shape[1] - 1, 0], [1, 1, predictor_feature_slice.shape[2]]);
-        predictor_feature_slice.print();
 
         // Compute joint features for the current audio and predictor features
         //const joint_features = joint.predict([audio_feature_slice, predictor_feature_slice]);
         const joint_features = joint.predict([predictor_feature_slice, audio_feature_slice]);
         const joint_logits = joint_features.squeeze([0]);
-        joint_logits.print();
+
 
         // Get the most likely token index
         const token_idx = joint_logits.argMax(-1).dataSync()[0];
@@ -72,11 +70,27 @@ function greedyDecode(audioFeatures, encoder, predictor, joint, max_length = 200
         }
     }
 
-    // Log the final tokens
-    console.log("Decoded tokens:", tokens);
     return tokens.slice(1); // Skip the initial blank token for the result
 }
 
+function decodeTokens(tokenIds, tokenizer) {
+    let decodedString = '';
+  
+    for (let i = 0; i < tokenIds.length; i++) {
+      let token = tokenizer[tokenIds[i]];
+  
+      // If the token starts with the special space symbol, add it without the leading space
+      // character and ensure there's a space before it unless it's the first token.
+      if (token && token.startsWith('\u2581')) {
+        decodedString += (i > 0 ? ' ' : '') + token.substring(1);
+      } else {
+        // For other tokens, just concatenate them.
+        decodedString += token;
+      }
+    }
+  
+    return decodedString;
+}
 
 async function loadModelAndPredict() {
     tf.setBackend('webgl');
@@ -101,6 +115,7 @@ async function loadModelAndPredict() {
     const encoder = await tf.loadGraphModel('models/encoder/model.json');
     const predictor = await tf.loadGraphModel('models/predictor/model.json');
     const joint = await tf.loadGraphModel('models/joint/model.json');
+    const tokenizer = await fetch('models/tokenizer.json').then(response => response.json());
 
     const testMelFeatures = tf.zeros([1, 1000, 80]);
     const testTextTokens = tf.tensor2d([[0, 1, 2, 3, 4]], [1, 5], 'int32');
@@ -149,8 +164,8 @@ async function loadModelAndPredict() {
     const audioFeatures = encoder.predict(melData);
     console.log("audioFeatures.shape: ", audioFeatures.shape);
 
-    result = greedyDecode(audioFeatures, encoder, predictor, joint);
-    console.log(result);
+    let result = greedyDecode(audioFeatures, encoder, predictor, joint);
+    console.log(decodeTokens(result, tokenizer));
 }
 
 // Call the function to load the model and make a prediction
