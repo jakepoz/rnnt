@@ -83,10 +83,10 @@ def train(cfg: DictConfig) -> None:
             input_id_lens = batch["input_id_lens"].to(device)
 
             # Calculate the total size of the joint feature vector, which will probably cause OOMs if it exceed an amount
-            max_joint_size = torch.max(input_id_lens).item() * torch.max(mel_feature_lens).item()
+            max_joint_size = torch.sum(input_id_lens).item() * torch.sum(mel_feature_lens).item()
             print(f"Max joint feature size: {max_joint_size:,}")
 
-            if max_joint_size > cfg.training.max_joint_size:
+            if max_joint_size > cfg.training.max_joint_size * 8:
                 print("Cutting batch in half, it's probably too large otherwise")
                 new_batch_size = mel_features.shape[0] // 2
                 mel_feature_lens = mel_feature_lens[:new_batch_size]
@@ -95,26 +95,45 @@ def train(cfg: DictConfig) -> None:
                 input_ids = input_ids[:new_batch_size, :torch.max(input_id_lens).item()]
                 
 
-
-            prepended_input_ids = torch.cat([torch.zeros(input_ids.shape[0], 1, dtype=input_ids.dtype, device=device), input_ids], dim=1)
-            prepended_input_ids[:, 0] = cfg.blank_idx
-
-            # Use traditional predictor for decoder features
-            decoder_features = model.predictor(prepended_input_ids)
-            
+ 
             # Generate the audio features, with gradients this time
             audio_features = model.encoder(mel_features) # (N, C, L)
             audio_features = audio_features.permute(0, 2, 1) # (N, L, C)
             audio_feature_lens = model.encoder.calc_output_lens(mel_feature_lens)
 
+            # Instead of doing each batch individually, we concatenate all the decoder features, and all the audio features
+            # And we expect the output to be all combined
+            # Initialize lists to hold the extracted features
+            extracted_audio_features = []
+            extracted_input_ids = [cfg.blank_idx]  # Start with the blank token
+
+            # Loop through each item in the batch to extract relevant portions
+            for idx in range(audio_features.shape[0]):  # Assuming audio_features shape is [batch_size, channels, features]
+                # Extract relevant audio features based on length
+                relevant_audio = audio_features[idx, :audio_feature_lens[idx], :]
+                extracted_audio_features.append(relevant_audio)
+
+                # Extract relevant input ids based on length
+                relevant_input_ids = input_ids[idx, :input_id_lens[idx]]
+                extracted_input_ids.extend(relevant_input_ids.tolist())
+
+            # Concatenate extracted features along a new dimension
+            # For decoder features, since lengths can vary, concatenation is a bit trickier. We use torch.cat and adjust dimensions as needed.
+            concat_audio_features = torch.cat([feat.unsqueeze(0) for feat in extracted_audio_features], dim=1)
+            concat_input_ids = torch.tensor(extracted_input_ids, dtype=torch.long, device=device).unsqueeze(0)
+            concat_decoder_features = model.predictor(concat_input_ids)
+            
+            
             # Now, apply the joint model to each combination
-            joint_features = model.joint(audio_features, decoder_features)
+            joint_features = model.joint(concat_audio_features, concat_decoder_features)
+
+
 
             # Calculate the loss
             loss = torchaudio.functional.rnnt_loss(logits=joint_features, 
-                                                   targets=input_ids.int(),
-                                                   logit_lengths=audio_feature_lens,
-                                                   target_lengths=input_id_lens.int(), 
+                                                   targets=concat_input_ids[:, 1:].int(),
+                                                   logit_lengths=torch.tensor([concat_audio_features.shape[1]], device=device).int(),
+                                                   target_lengths=torch.tensor([concat_input_ids.shape[1] - 1], device=device).int(),
                                                    blank=-1,
                                                    clamp=cfg.training.rnnt_grad_clamp,
                                                    reduction="mean")
