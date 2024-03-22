@@ -3,9 +3,7 @@ import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-webgpu';
 import '@tensorflow/tfjs-backend-wasm';
 
-import { setThreadsCount, getThreadsCount } from '@tensorflow/tfjs-backend-wasm';
-
-
+import { setThreadsCount, getThreadsCount } from "@tensorflow/tfjs-backend-wasm";
 
 async function loadTensor(url) {
     try {
@@ -111,10 +109,12 @@ function decodeTokens(tokenIds, tokenizer) {
 async function loadModelAndPredict() {
     console.log("tf backend: ", tf.getBackend());
     console.log("tf version: ", tf.version);
-    console.log("thread count: ", getThreadsCount());
+    //console.log(getThreadsCount());
 
     // tf.env().reset();
     //tf.env().set("WEBGL_USE_SHAPES_UNIFORMS", true);    
+    tf.env().set('WEBGL_USE_SHAPES_UNIFORMS', true);
+    //tf.env().set('WEBGL_EXP_CONV', true);
     //tf.env().set("WEBGPU_DEFERRED_SUBMIT_BATCH_SIZE", 0);
 
     tf.registerOp("_MklLayerNorm", (node) => {
@@ -178,11 +178,12 @@ async function loadModelAndPredict() {
     console.timeEnd('predictor');
 
     console.time('joint');
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 350; i++) {
         let testLogits = joint.predict({
             audio_frame: testJoinerInput1, 
             text_frame: testJoinerInput2
         });
+        //testLogits.dataSync();
         // console.log(testLogits);
         // console.log(testLogits.shape);
     }
@@ -193,7 +194,7 @@ async function loadModelAndPredict() {
     melData = melData.reshape([1, melData.shape[0], melData.shape[1]]);
     melData = melData.transpose([0, 2, 1]);
     console.log("melData.shape: ", melData.shape);
-    melData.print();
+
 
     // Convert the mel data to audio features
     const audioFeatures = encoder.predict(melData);
@@ -207,6 +208,8 @@ async function loadModelAndPredict() {
     console.table(tf.memory());
 }
 
-setThreadsCount(4);
-console.log(tf.env().flags);
-tf.setBackend('wasm').then(() => loadModelAndPredict());
+//setThreadsCount(8);
+// console.log(tf.env().flags);
+//tf.setBackend('wasm').then(() => loadModelAndPredict());
+//tf.setBackend('webgpu').then(() => loadModelAndPredict());
+tf.setBackend('webgl').then(() => loadModelAndPredict());

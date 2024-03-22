@@ -16,7 +16,7 @@ from rnnt.model import RNNTModel
 from rnnt.util import save_model, get_output_dir
 
 
-@hydra.main(version_base=None, config_path="config", config_name="basic_sp.yaml")
+@hydra.main(version_base=None, config_path="config", config_name="basic_sp_conv.yaml")
 def train(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     output_dir = get_output_dir(cfg)
