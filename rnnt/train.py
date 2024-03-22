@@ -103,9 +103,11 @@ def train(cfg: DictConfig) -> None:
             decoder_features = model.predictor(prepended_input_ids)
             
             # Generate the audio features, with gradients this time
-            audio_features = model.encoder(mel_features) # (N, C, L)
-            audio_features = audio_features.permute(0, 2, 1) # (N, L, C)
-            audio_feature_lens = model.encoder.calc_output_lens(mel_feature_lens)
+            mel_features = mel_features.permute(0, 2, 1) # (N, T, D) now
+            audio_features, audio_feature_lens = model.encoder(mel_features, mel_feature_lens) # (N, C, L)
+           
+            # TODO This is a strange workaround because the lengths are often one higher than needed
+            audio_feature_lens = audio_feature_lens - 1
 
             # Now, apply the joint model to each combination
             joint_features = model.joint(audio_features, decoder_features)
@@ -113,7 +115,7 @@ def train(cfg: DictConfig) -> None:
             # Calculate the loss
             loss = torchaudio.functional.rnnt_loss(logits=joint_features, 
                                                    targets=input_ids.int(),
-                                                   logit_lengths=audio_feature_lens,
+                                                   logit_lengths=audio_feature_lens.int(),
                                                    target_lengths=input_id_lens.int(), 
                                                    blank=-1,
                                                    clamp=cfg.training.rnnt_grad_clamp,
