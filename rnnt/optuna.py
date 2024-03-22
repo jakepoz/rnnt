@@ -5,20 +5,16 @@ from hydra import compose, initialize
 from rnnt.train import train
 
 def objective(trial):
-    beta0_inv = trial.suggest_float("beta0_inv", 1e-6, 0.2, log=True)
-    beta1_inv = trial.suggest_float("beta1_inv", 1e-6, 1.0, log=True)
-
-    # beta1_inv == 0.0 means beta1 = 1.0
-    # beta1_inv == 0.5, beta1 = halfway between beta0 and 1.0, etc.
-    beta0 = 1.0 - beta0_inv
-    beta1 = beta0 + (1.0 - beta0) * (1.0 - beta1_inv)
+    clip_grad_norm = trial.suggest_float("clip_grad_norm", 0.0, 100.0)
+    rnnt_grad_clamp = trial.suggest_float("rnnt_grad_clamp", 0.0, 100.0)
 
     with initialize(config_path="config"):
         # Load your existing configuration
         cfg = compose(config_name="basic_sp_conv.yaml")
         
         # Update the configuration with the suggested hyperparameters
-        cfg.training.optimizer.betas = [beta0, beta1]
+        cfg.training.clip_grad_norm = clip_grad_norm
+        cfg.training.rnnt_grad_clamp = rnnt_grad_clamp
 
         # Run training with the current set of hyperparameters
         try:
@@ -37,7 +33,7 @@ def objective(trial):
 if __name__ == "__main__":
 
 
-    study = optuna.create_study(study_name="single_epoch_conv_beta_study2", 
+    study = optuna.create_study(study_name="grad_clamping_study", 
                                 direction="minimize",
                                 storage= optuna.storages.RDBStorage(url="postgresql://optuna_user:password@localhost/optuna_db"),
                                 load_if_exists=True,
