@@ -18,9 +18,7 @@ class RNNTModel(torch.nn.Module):
     def _greedy_decode_lstm(self, mel_features: torch.Tensor, mel_feature_lens: torch.Tensor, max_length: int = 200) -> list[int]:
         assert mel_features.shape[0] == 1, "Greedy decoding only works with a batch size of 1"
 
-        audio_features = self.encoder(mel_features) # (N, C, L)
-        audio_features = audio_features.permute(0, 2, 1) # (N, L, C)
-        audio_feature_lens = self.encoder.calc_output_lens(mel_feature_lens)
+        audio_features, audio_feature_lens = self.encoder(mel_features.permute(0, 2, 1), mel_feature_lens) # (N, C, L)
 
         tokens = [self.joint.blank_idx]
 
@@ -62,9 +60,7 @@ class RNNTModel(torch.nn.Module):
     def _greedy_decode_conv(self, mel_features: torch.Tensor, mel_feature_lens: torch.Tensor, max_length: int = 200) -> list[int]:
         assert mel_features.shape[0] == 1, "Greedy decoding only works with a batch size of 1"
 
-        audio_features = self.encoder(mel_features) # (N, C, L)
-        audio_features = audio_features.permute(0, 2, 1) # (N, L, C)
-        audio_feature_lens = self.encoder.calc_output_lens(mel_feature_lens)
+        audio_features, audio_feature_lens = self.encoder(mel_features.permute(0, 2, 1), mel_feature_lens) # (N, C, L)
 
         tokens = [self.joint.blank_idx]
 
