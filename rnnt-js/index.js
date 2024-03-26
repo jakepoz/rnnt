@@ -5,6 +5,23 @@ import '@tensorflow/tfjs-backend-wasm';
 
 import { setThreadsCount, getThreadsCount } from "@tensorflow/tfjs-backend-wasm";
 
+function updateLog(...args) {
+    const logElement = document.getElementById('log');
+    // Convert all arguments to string and concatenate them with spaces
+    const message = args.map(arg => {
+        // Attempt to stringify objects, fall back to toString for others
+        try {
+            return (typeof arg === 'object') ? JSON.stringify(arg) : arg.toString();
+        } catch (error) {
+            return arg.toString(); // Fallback for objects that cannot be stringified
+        }
+    }).join(' ');
+
+    logElement.innerHTML += message + '<br/>';
+    logElement.scrollTop = logElement.scrollHeight; // Auto-scroll to the bottom
+}
+
+
 async function loadTensor(url) {
     try {
         const response = await fetch(url);
@@ -106,16 +123,26 @@ function decodeTokens(tokenIds, tokenizer) {
     return decodedString;
 }
 
+function updateMemoryInfo() {
+    const memoryInfo = JSON.stringify(tf.memory(), null, 2);
+    document.getElementById('memory-info').innerText = memoryInfo;
+}
+
 async function loadModelAndPredict() {
-    console.log("tf backend: ", tf.getBackend());
-    console.log("tf version: ", tf.version);
-    //console.log(getThreadsCount());
+    updateLog("Initializing TensorFlow.js...");
+
+    document.getElementById('backend-info').innerText = tf.getBackend() + " " + tf.version.tfjs.toString();
+ 
+    updateLog(JSON.stringify(tf.version));
 
     // tf.env().reset();
     //tf.env().set("WEBGL_USE_SHAPES_UNIFORMS", true);    
     tf.env().set('WEBGL_USE_SHAPES_UNIFORMS', true);
     //tf.env().set('WEBGL_EXP_CONV', true);
     //tf.env().set("WEBGPU_DEFERRED_SUBMIT_BATCH_SIZE", 0);
+
+    updateLog(JSON.stringify(tf.env().flags, null, 2));
+    updateMemoryInfo();
 
     tf.registerOp("_MklLayerNorm", (node) => {
         const [ x, scale, offset ] = node.inputs;
@@ -133,33 +160,48 @@ async function loadModelAndPredict() {
         return shifted;
     });
   
-    const encoder = await tf.loadGraphModel('models/encoder/model.json');
-    const predictor = await tf.loadGraphModel('models/predictor/model.json');
-    const joint = await tf.loadGraphModel('models/joint/model.json');
+    const encoder = await tf.loadGraphModel('models/encoder/model.json', {
+        onProgress: (fraction) => {
+            const percentComplete = Math.round(fraction * 100);
+            updateLog(`Encoder model loading progress: ${percentComplete}%`);
+        }
+    });
+
+    const predictor = await tf.loadGraphModel('models/predictor/model.json', {
+        onProgress: (fraction) => {
+            const percentComplete = Math.round(fraction * 100);
+            updateLog(`Predictor model loading progress: ${percentComplete}%`);
+        }
+    });
+
+    const joint = await tf.loadGraphModel('models/joint/model.json', {
+        onProgress: (fraction) => {
+            const percentComplete = Math.round(fraction * 100);
+            updateLog(`Joint model loading progress: ${percentComplete}%`);
+        }
+    });
+
     const tokenizer = await fetch('models/tokenizer.json').then(response => response.json());
 
+
+
+    //Warmup all the networks once 
     const testMelFeatures = tf.zeros([1, 1000, 80]);
     const testTextTokens = tf.tensor2d([[0, 1, 2, 3, 4]], [1, 5], 'int32');
 
     const testJoinerInput1 = tf.zeros([1, 1, 1024]);
     const testJoinerInput2 = tf.zeros([1, 1, 1024]);
 
-    // tf.enableDebugMode();
+    await encoder.predictAsync(testMelFeatures);
+    updateLog("Warmed up encoder");
 
-    // let testLogitsz = joint.predict({
-    //     audio_frame: testJoinerInput1, 
-    //     text_frame: testJoinerInput2
-    // });
-    // testLogitsz.print();
+    await predictor.predictAsync(testTextTokens);
+    updateLog("Warmed up predictor");
 
-    console.log(tf.env().flags);
+    await joint.predictAsync([testJoinerInput1, testJoinerInput2]);
+    updateLog("Warmed up joint");
 
-    //Warmup all the networks once 
-    console.log("warming up")
-    encoder.predict(testMelFeatures);
-    predictor.predict(testTextTokens);
-    joint.predict([testJoinerInput1, testJoinerInput2]);
-    console.log("done warming up");
+    updateMemoryInfo();
 
 
 
@@ -208,8 +250,8 @@ async function loadModelAndPredict() {
     console.table(tf.memory());
 }
 
-//setThreadsCount(8);
+setThreadsCount(4);
 // console.log(tf.env().flags);
-//tf.setBackend('wasm').then(() => loadModelAndPredict());
+tf.setBackend('wasm').then(() => loadModelAndPredict());
 //tf.setBackend('webgpu').then(() => loadModelAndPredict());
-tf.setBackend('webgl').then(() => loadModelAndPredict());
+//tf.setBackend('webgl').then(() => loadModelAndPredict());

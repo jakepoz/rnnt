@@ -13,11 +13,13 @@
   "license": "ISC",
   "dependencies": {
     "@tensorflow/tfjs": "^4.17.0",
-    "@tensorflow/tfjs-backend-webgpu": "^4.17.0",
     "@tensorflow/tfjs-backend-wasm": "^4.17.0",
+    "@tensorflow/tfjs-backend-webgpu": "^4.17.0",
     "rfc4648": "^1.5.3"
   },
   "devDependencies": {
+    "@babel/core": "^7.24.3",
+    "@babel/preset-env": "^7.24.3",
     "vite": "^2.0.0"
   }
 }
