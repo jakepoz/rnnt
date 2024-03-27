@@ -164,6 +164,39 @@ async function doSampleInference(encoder, predictor, joint, tokenizer) {
     updateLog("Result: ", decodeTokens(result, tokenizer));
 }
 
+
+async function startListening() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error("Browser API navigator.mediaDevices.getUserMedia not available");
+        updateLog("Error: Browser does not support required media devices.");
+        return;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+
+    const audioContext = new AudioContext();
+    await audioContext.audioWorklet.addModule('audio-processor.js'); // Ensure this path is correct!
+    const audioSourceNode = audioContext.createMediaStreamSource(stream);
+
+    const audioProcessorNode = new AudioWorkletNode(audioContext, 'audio-processor', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+    });
+
+    // Connect everything together
+    audioSourceNode.connect(audioProcessorNode).connect(audioContext.destination);
+
+    // Handle audio processing event
+    audioProcessorNode.port.onmessage = (event) => {
+        // Process the downsampled audio data here
+        console.log(event.data);
+        // For example, featurizer(event.data);
+    };
+
+    console.log("Listening...");
+}
+
 async function loadModelAndPredict() {
     updateLog("Initializing TensorFlow.js...");
 
@@ -262,6 +295,9 @@ async function loadModelAndPredict() {
     console.timeEnd('joint');
 
     doSampleInference(encoder, predictor, joint, tokenizer);
+
+    document.getElementById('start-listening').disabled = false;
+    document.getElementById('start-listening').addEventListener('click', startListening);
 }
 
 setThreadsCount(4);
