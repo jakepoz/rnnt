@@ -1,10 +1,7 @@
 class AudioProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
-        // You can initialize your variables here
     }
-
-
 
     process(inputs, outputs, parameters) {
         const input = inputs[0];
@@ -12,8 +9,14 @@ class AudioProcessor extends AudioWorkletProcessor {
 
         // Assuming the input contains data and we only process channel 0
         if (input && input.length > 0) {
+            // We are running the main input audio at 48khz, which we just take every 3rd sample to downsample easily to 16khz
             const channelData = input[0];
-            this.port.postMessage(channelData);
+            const downsampledData = new Float32Array(Math.ceil(channelData.length / 3));
+            for (let i = 0, j = 0; i < channelData.length; i += 3, j++) {
+                downsampledData[j] = channelData[i];
+            }
+
+            this.port.postMessage(downsampledData);
         }
 
         return true;

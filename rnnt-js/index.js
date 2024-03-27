@@ -6,6 +6,7 @@ import '@tensorflow/tfjs-backend-wasm';
 import { setThreadsCount, getThreadsCount } from "@tensorflow/tfjs-backend-wasm";
 
 import { featurizer } from './featurizer';
+import { downloadAudio } from "./wav";
 
 function updateLog(...args) {
     const logElement = document.getElementById('log');
@@ -173,11 +174,14 @@ async function startListening(encoder, predictor, joint, tokenizer) {
     }
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: {
-        sampleRate: 16000,
+        sampleRate: 48000,
         channelCount: 1,
     }, video: false });
 
-    const audioContext = new AudioContext();
+
+    const audioContext = new AudioContext({
+        sampleRate: 48000,
+    });
     await audioContext.audioWorklet.addModule('audio-processor.js'); // Ensure this path is correct!
     const audioSourceNode = audioContext.createMediaStreamSource(stream);
 
@@ -185,38 +189,51 @@ async function startListening(encoder, predictor, joint, tokenizer) {
 
     audioSourceNode.connect(audioProcessorNode);
 
+    console.log("Connected audio source to processor node", audioContext.sampleRate);
+
     let sampleBuffer = [];
 
     const hopSize = 160, windowSize = 400;
     const sampleBufferSize = 60000; 
 
+    let start = null;
+    let totalSamples = 0;
+
     audioProcessorNode.port.onmessage = (event) => {
         const { data } = event;
         
-        const start = performance.now();
+        if (!start) {
+            start = performance.now();
+        }
+
         sampleBuffer = sampleBuffer.concat(Array.from(event.data));
 
+        totalSamples += event.data.length;
         //console.log("Sample buffer length: ", sampleBuffer.length);
         
         if (sampleBuffer.length >= sampleBufferSize) {
+            console.log("Samples per second: ", totalSamples / ((performance.now() - start) / 1000));
+
             // Process the current buffer
             const localBuffer = sampleBuffer.slice(0, sampleBufferSize);
 
             // TODO Is this quite right? needs a unit test 
             sampleBuffer = sampleBuffer.slice(sampleBufferSize - (windowSize - hopSize));
 
+            // Save off the localBuffer
+            downloadAudio(localBuffer, 16000);
+
             const features = tf.expandDims(featurizer(tf.tensor1d(localBuffer)), 0);
 
            // console.log(features.shape);
             const audioFeatures = encoder.predict(features);
+            console.log(audioFeatures.shape);
 
             let result = greedyDecode(audioFeatures, encoder, predictor, joint);
             console.log(decodeTokens(result, tokenizer));
         }
 
-        const end = performance.now();
-        //console.log("Time taken: ", end - start);
-
+      
     };
     
     console.log("Listening...");
