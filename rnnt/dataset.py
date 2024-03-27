@@ -1,6 +1,8 @@
 import torch
 import datasets
 
+from rnnt.util import save_tensor_json
+
 
 
 # These functions are meant to fetch the raw datasets from hugging face or some other system
@@ -36,6 +38,9 @@ class AudioDatasetProcessor(torch.utils.data.Dataset):
 
         audio = torch.from_numpy(row["audio"]["array"]).to(torch.float32).to(self.device)
         text = row["text"].lower()
+
+        # with open("sampleaudio.json", "w") as f:
+        #         f.write(save_tensor_json(audio.cpu()))
 
         audio_features = self.featurizer(audio)
         text_tokens = torch.tensor(self.tokenizer.encode(text)).to(self.device)

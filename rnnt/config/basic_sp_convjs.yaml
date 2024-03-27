@@ -1,4 +1,4 @@
-model_name: "basic_char_conv"
+model_name: "basic_char_convjs"
 
 num_text_tokens: 1023
 num_total_symbols: 1024
@@ -9,14 +9,10 @@ tokenizer:
   model_file: /home/jake/rnnt/spm_unigram_1023.model
 
 featurizer:
-  _target_: rnnt.featurizer.NormalizedMelSpectrogram
-  sample_rate: 16000
-  n_fft: 512
+  _target_: rnnt.featurizer.TFJSSpectrogram
+  n_fft: 400
   win_length: 400
   hop_length: 160
-  n_mels: 80
-  f_min: 0
-  f_max: 8000
   apply_linear_log: True
   mean: 15.0
   invstddev: 0.25
@@ -30,7 +26,7 @@ predictor:
 
 encoder:
   _target_: rnnt.jasper.AudioEncoder
-  input_features: ${featurizer.n_mels}
+  input_features: 201
   norm_type: instance_affine
   prologue_kernel_size: 11
   prologue_stride: 2

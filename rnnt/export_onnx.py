@@ -35,7 +35,7 @@ def convert(checkpoint, config_path=None, export_dir="export"):
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
     
-    example_mel_features = torch.randn(1, cfg.featurizer.n_mels, 1000)
+    example_mel_features = torch.randn(1, cfg.encoder.input_features, 1000)
     encoder_scripted = torch.jit.script(model.encoder)
     torch.onnx.export(encoder_scripted, example_mel_features, os.path.join(export_dir, "encoder.onnx"), verbose=True,
                       dynamic_axes={"mel_features": {2: "frames"}},

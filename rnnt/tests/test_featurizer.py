@@ -1,6 +1,7 @@
 import torch
 import unittest
 
+from rnnt.featurizer import TFJSSpectrogram
 
 class JavascriptFeaturizerTest(unittest.TestCase):
     def test_stft(self):
@@ -22,3 +23,19 @@ class JavascriptFeaturizerTest(unittest.TestCase):
 
         print(match.shape)
         print(match)
+
+    def test_tfjs_spectrogram(self):
+        input = torch.ones(1000, dtype=torch.float32);
+
+        n_fft = 400;
+        hop_length = 160;
+        win_length = 400;
+        apply_linear_log = True;
+        mean = 15.0;
+        invstddev = 0.2;
+
+        featurizer = TFJSSpectrogram(n_fft, hop_length, win_length, apply_linear_log, mean, invstddev)
+        result = featurizer(input)
+
+        print(result.shape)
+        print(result)
