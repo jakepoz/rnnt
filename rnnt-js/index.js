@@ -245,7 +245,7 @@ async function loadModelAndPredict() {
     // Load some sample audio directly, and attempt to decode it
     let audioData = await loadTensor('sampleaudio.json');
 
-    tf.max(audioData).print();
+    console.log("audioData.shape: ", audioData.shape);
 
     const spec_features = tf.expandDims(featurizer(audioData), 0);
     console.log("Featurizing!");
@@ -261,6 +261,7 @@ async function loadModelAndPredict() {
     console.log(decodeTokens(result, tokenizer));
     console.timeEnd('greedyDecode');
 
+    updateLog("Result: ", decodeTokens(result, tokenizer));
 }
 
 setThreadsCount(4);

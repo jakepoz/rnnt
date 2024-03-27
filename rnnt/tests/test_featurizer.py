@@ -12,7 +12,7 @@ class JavascriptFeaturizerTest(unittest.TestCase):
         win_length = 400;
         result = torch.stft(input, n_fft, hop_length, win_length, 
                             window=torch.hann_window(win_length),
-                            center=True,
+                            center=False,
                             onesided=True,
                             normalized=False,
                             return_complex=True)
@@ -25,17 +25,19 @@ class JavascriptFeaturizerTest(unittest.TestCase):
         print(match)
 
     def test_tfjs_spectrogram(self):
-        input = torch.ones(1000, dtype=torch.float32);
+        input = torch.ones(10544, dtype=torch.float32);
 
         n_fft = 400;
         hop_length = 160;
         win_length = 400;
         apply_linear_log = True;
         mean = 15.0;
-        invstddev = 0.2;
+        invstddev = 0.25;
 
         featurizer = TFJSSpectrogram(n_fft, hop_length, win_length, apply_linear_log, mean, invstddev)
         result = featurizer(input)
 
+        print("A")
         print(result.shape)
-        print(result)
+
+        print(result.T)

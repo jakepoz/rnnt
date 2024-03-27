@@ -6,7 +6,7 @@ import { featurizer } from './featurizer';
 describe('featurizer function', () => {
     it('should correctly compute the STFT of the input waveform', () => {
         // Create a mock waveform as a 1D Tensor. This is a simplistic example.
-        const mockWaveform = tf.ones([1000], 'float32');
+        const mockWaveform = tf.ones([10544], 'float32');
 
         // Call the featurizer function
         const output = featurizer(mockWaveform);

@@ -64,7 +64,7 @@ def eval(checkpoint, config_path=None) -> None:
     model.eval()
 
     print("Model loaded...")
-    sample_mel_features = torch.zeros(1, cfg.featurizer.n_mels, 1000).to(device)
+    sample_mel_features = torch.zeros(1, cfg.encoder.input_features, 1000).to(device)
     sample_audio_features = model.encoder(sample_mel_features).permute(0, 2, 1)
 
     sample_tokens = torch.tensor([[0, 1, 2, 3, 4]]).to(device)

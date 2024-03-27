@@ -28,7 +28,7 @@ export function featurizer(waveform) {
 
     let spec_f = tf.pow(tf.abs(stft_f), 2.0);
 
-    spec_f = _piecewise_linear_log(spec_f);
+    spec_f = _piecewise_linear_log(tf.add(spec_f, 1e-6));
 
     // Hardcoded mean/stddev
     spec_f = tf.mul(tf.add(spec_f, -15.0), 0.25);
