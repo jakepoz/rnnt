@@ -165,35 +165,60 @@ async function doSampleInference(encoder, predictor, joint, tokenizer) {
 }
 
 
-async function startListening() {
+async function startListening(encoder, predictor, joint, tokenizer) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         console.error("Browser API navigator.mediaDevices.getUserMedia not available");
         updateLog("Error: Browser does not support required media devices.");
         return;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+    }, video: false });
 
     const audioContext = new AudioContext();
     await audioContext.audioWorklet.addModule('audio-processor.js'); // Ensure this path is correct!
     const audioSourceNode = audioContext.createMediaStreamSource(stream);
 
-    const audioProcessorNode = new AudioWorkletNode(audioContext, 'audio-processor', {
-        numberOfInputs: 1,
-        numberOfOutputs: 1,
-        outputChannelCount: [1],
-    });
+    const audioProcessorNode = new AudioWorkletNode(audioContext, 'audio-processor');
 
-    // Connect everything together
-    audioSourceNode.connect(audioProcessorNode).connect(audioContext.destination);
+    audioSourceNode.connect(audioProcessorNode);
 
-    // Handle audio processing event
+    let sampleBuffer = [];
+
+    const hopSize = 160, windowSize = 400;
+    const sampleBufferSize = 60000; 
+
     audioProcessorNode.port.onmessage = (event) => {
-        // Process the downsampled audio data here
-        console.log(event.data);
-        // For example, featurizer(event.data);
-    };
+        const { data } = event;
+        
+        const start = performance.now();
+        sampleBuffer = sampleBuffer.concat(Array.from(event.data));
 
+        //console.log("Sample buffer length: ", sampleBuffer.length);
+        
+        if (sampleBuffer.length >= sampleBufferSize) {
+            // Process the current buffer
+            const localBuffer = sampleBuffer.slice(0, sampleBufferSize);
+
+            // TODO Is this quite right? needs a unit test 
+            sampleBuffer = sampleBuffer.slice(sampleBufferSize - (windowSize - hopSize));
+
+            const features = tf.expandDims(featurizer(tf.tensor1d(localBuffer)), 0);
+
+           // console.log(features.shape);
+            const audioFeatures = encoder.predict(features);
+
+            let result = greedyDecode(audioFeatures, encoder, predictor, joint);
+            console.log(decodeTokens(result, tokenizer));
+        }
+
+        const end = performance.now();
+        //console.log("Time taken: ", end - start);
+
+    };
+    
     console.log("Listening...");
 }
 
@@ -297,7 +322,9 @@ async function loadModelAndPredict() {
     doSampleInference(encoder, predictor, joint, tokenizer);
 
     document.getElementById('start-listening').disabled = false;
-    document.getElementById('start-listening').addEventListener('click', startListening);
+    document.getElementById('start-listening').addEventListener('click', () => {
+        startListening(encoder, predictor, joint, tokenizer);
+    });
 }
 
 setThreadsCount(4);
