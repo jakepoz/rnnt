@@ -12,7 +12,7 @@ from omegaconf import DictConfig, OmegaConf
 from datasets import concatenate_datasets
 
 
-@hydra.main(version_base=None, config_path="config", config_name="basic_sp_conv.yaml")
+@hydra.main(version_base=None, config_path="config", config_name="basic_sp_convjs.yaml")
 def calc_global_features(cfg: DictConfig) -> None:
     device = torch.device("cuda")
 
@@ -40,8 +40,8 @@ def calc_global_features(cfg: DictConfig) -> None:
     # Force batch size to 1 so there is no weird padding that messes up the count
     train_dataloader = hydra.utils.instantiate(cfg.data.train.dataloader, train_ds, batch_size=1)
 
-    total_mel_features_sum = torch.zeros(80, device=device) 
-    total_mel_features_sq_sum = torch.zeros(80, device=device)  
+    total_mel_features_sum = torch.zeros(cfg.encoder.input_features, device=device) 
+    total_mel_features_sq_sum = torch.zeros(cfg.encoder.input_features, device=device)  
     total_mel_features_count = 0
 
 

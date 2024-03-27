@@ -1,7 +1,7 @@
 # Quit on errors
 set -e
 
-checkpoint="/home/jake/rnnt/experiments/basic_char_convjs/run-3/checkpoint_step_70311.pt"
+checkpoint="/home/jake/rnnt/experiments/basic_char_convjs/run-4/checkpoint_step_20000.pt"
 
 # Export to ONNX
 python -m rnnt.export_onnx $checkpoint

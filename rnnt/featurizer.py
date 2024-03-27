@@ -59,8 +59,16 @@ class TFJSSpectrogram(torch.nn.Module):
         self.win_length = win_length
 
         self.apply_linear_log = apply_linear_log
-        self.mean = mean
-        self.invstddev = invstddev
+
+        if isinstance(mean, float):
+            self.mean = mean
+        else:
+            self.mean = torch.tensor(mean)
+
+        if isinstance(invstddev, float):
+            self.invstddev = invstddev
+        else:
+            self.invstddev = torch.tensor(invstddev)
 
     @torch.no_grad()
     def forward(self, waveform):
@@ -76,6 +84,10 @@ class TFJSSpectrogram(torch.nn.Module):
         if self.apply_linear_log:
             spec = _piecewise_linear_log(spec + 1e-6)
 
-        spec = (spec - self.mean) * self.invstddev
+        if isinstance(self.mean, float):
+            spec = (spec - self.mean) * self.invstddev
+        else:
+            spec = (spec - self.mean.unsqueeze(-1)) * self.invstddev.unsqueeze(-1)
+
 
         return spec

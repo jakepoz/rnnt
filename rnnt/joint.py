@@ -4,8 +4,12 @@ import torch.nn.functional as F
 class JointNetwork(torch.nn.Module):
     def __init__(self, audio_features: int, text_features: int, hidden_features: int, num_classes: int):
         super(JointNetwork, self).__init__()
-        self.audio_ln = torch.nn.Linear(audio_features, hidden_features)
-        self.text_ln = torch.nn.Linear(text_features, hidden_features)
+
+        if audio_features > 0:
+            self.audio_ln = torch.nn.Linear(audio_features, hidden_features)
+
+        if text_features > 0:
+            self.text_ln = torch.nn.Linear(text_features, hidden_features)
 
         self.activation = F.tanh
  
@@ -18,9 +22,12 @@ class JointNetwork(torch.nn.Module):
     # Use this version to do training on a batch, where you need to calculate every combination of joint and decoder states
     # Audio Frame expected to be [N, Length, Featuers]
     # Text Frame expected to be [N, Length, Features]
-    def forward(self, audio_frame, text_frame):        
-        audio_frame = self.audio_ln(audio_frame)
-        text_frame = self.text_ln(text_frame)
+    def forward(self, audio_frame, text_frame):  
+        if hasattr(self, 'audio_ln'):      
+            audio_frame = self.audio_ln(audio_frame)
+
+        if hasattr(self, 'text_ln'):
+            text_frame = self.text_ln(text_frame)
 
         audio_frames = audio_frame.unsqueeze(2)
         text_frames = text_frame.unsqueeze(1)
@@ -35,8 +42,11 @@ class JointNetwork(torch.nn.Module):
     # Audio Frame expected to be [N, Length, Featuers]
     # Text Frame expected to be [N, Length, Features]
     def single_forward(self, audio_frame, text_frame):
-        audio_frame = self.audio_ln(audio_frame)
-        text_frame = self.text_ln(text_frame)
+        if hasattr(self, 'audio_ln'):      
+            audio_frame = self.audio_ln(audio_frame)
+
+        if hasattr(self, 'text_ln'):
+            text_frame = self.text_ln(text_frame)
 
         joint_frame = audio_frame + text_frame
 
