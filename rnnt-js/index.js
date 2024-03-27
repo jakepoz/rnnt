@@ -130,6 +130,40 @@ function updateMemoryInfo() {
     document.getElementById('memory-info').innerText = memoryInfo;
 }
 
+async function doSampleInference(encoder, predictor, joint, tokenizer) {
+   
+
+    // Now load some sample mel data and attempt to decode it
+    let melData = await loadTensor('samplemels.json');
+    melData = melData.reshape([1, melData.shape[0], melData.shape[1]]);
+    melData = melData.transpose([0, 2, 1]);
+    console.log("melData.shape: ", melData.shape);
+
+
+
+
+    // Load some sample audio directly, and attempt to decode it
+    let audioData = await loadTensor('sampleaudio.json');
+
+    console.log("audioData.shape: ", audioData.shape);
+
+    const spec_features = tf.expandDims(featurizer(audioData), 0);
+    console.log("Featurizing!");
+    console.log(spec_features.shape);
+    spec_features.print();
+
+    // Convert the mel data to audio features
+    const audioFeatures = encoder.predict(spec_features);
+    console.log("audioFeatures.shape: ", audioFeatures.shape);
+
+    console.time('greedyDecode');
+    let result = greedyDecode(audioFeatures, encoder, predictor, joint);
+    console.log(decodeTokens(result, tokenizer));
+    console.timeEnd('greedyDecode');
+
+    updateLog("Result: ", decodeTokens(result, tokenizer));
+}
+
 async function loadModelAndPredict() {
     updateLog("Initializing TensorFlow.js...");
 
@@ -205,15 +239,12 @@ async function loadModelAndPredict() {
 
     updateMemoryInfo();
 
-
-
     // Now time them
     console.time('encoder');
     let testAudioFeatures = encoder.predict(testMelFeatures);
     console.log(testAudioFeatures);
     console.log(testAudioFeatures.shape)
     console.timeEnd('encoder');
-
 
     console.time('predictor');
     let testTextFeatures = predictor.predict(testTextTokens);
@@ -227,41 +258,10 @@ async function loadModelAndPredict() {
             audio_frame: testJoinerInput1, 
             text_frame: testJoinerInput2
         });
-        //testLogits.dataSync();
-        // console.log(testLogits);
-        // console.log(testLogits.shape);
     }
     console.timeEnd('joint');
 
-    // // Now load some sample mel data and attempt to decode it
-    let melData = await loadTensor('samplemels.json');
-    melData = melData.reshape([1, melData.shape[0], melData.shape[1]]);
-    melData = melData.transpose([0, 2, 1]);
-    console.log("melData.shape: ", melData.shape);
-
-
-
-
-    // Load some sample audio directly, and attempt to decode it
-    let audioData = await loadTensor('sampleaudio.json');
-
-    console.log("audioData.shape: ", audioData.shape);
-
-    const spec_features = tf.expandDims(featurizer(audioData), 0);
-    console.log("Featurizing!");
-    console.log(spec_features.shape);
-    spec_features.print();
-
-    // Convert the mel data to audio features
-    const audioFeatures = encoder.predict(spec_features);
-    console.log("audioFeatures.shape: ", audioFeatures.shape);
-
-    console.time('greedyDecode');
-    let result = greedyDecode(audioFeatures, encoder, predictor, joint);
-    console.log(decodeTokens(result, tokenizer));
-    console.timeEnd('greedyDecode');
-
-    updateLog("Result: ", decodeTokens(result, tokenizer));
+    doSampleInference(encoder, predictor, joint, tokenizer);
 }
 
 setThreadsCount(4);
