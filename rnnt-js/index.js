@@ -53,7 +53,7 @@ async function loadTensor(url) {
     }
 }
 
-function greedyDecode(audioFeatures, encoder, predictor, joint, max_length = 200) {
+function greedyDecode(audioFeatures, encoder, predictor, joint, existingTokens = [], max_length = 200) {
     const blank_idx = 1023;
 
     // Initialize tokens array with the blank index, assuming 0 is the blank index
@@ -62,6 +62,11 @@ function greedyDecode(audioFeatures, encoder, predictor, joint, max_length = 200
     const max_audio_time = audioFeatures.shape[1];
     let cur_outputs_per_step = 0;
     const max_outputs_per_step = 10;
+
+    // If there are existing tokens, add them to the tokens array
+    if (existingTokens.length > 0) {
+        tokens = tokens.concat(existingTokens);
+    }
 
     // Convert tokens to a tensor
     let input_ids = tf.tensor2d([tokens], [1, tokens.length], 'int32');
@@ -132,8 +137,6 @@ function updateMemoryInfo() {
 }
 
 async function doSampleInference(encoder, predictor, joint, tokenizer) {
-   
-
     // Now load some sample mel data and attempt to decode it
     let melData = await loadTensor('samplemels.json');
     melData = melData.reshape([1, melData.shape[0], melData.shape[1]]);
@@ -191,49 +194,50 @@ async function startListening(encoder, predictor, joint, tokenizer) {
 
     console.log("Connected audio source to processor node", audioContext.sampleRate);
 
-    let sampleBuffer = [];
-
+    let allTokens = [];
+    
     const hopSize = 160, windowSize = 400;
-    const sampleBufferSize = 60000; 
+    const sampleBufferSize = 1280;
+    const largeBufferSize = 16000;
+    let largeBuffer = new Float32Array(largeBufferSize);
+    let sampleBuffer = new Float32Array(0);
 
     let start = null;
-    let totalSamples = 0;
+    let totalSamples = 0, totalRuns = 0;
 
     audioProcessorNode.port.onmessage = (event) => {
-        const { data } = event;
+        const incomingSamples = new Float32Array(event.data);
         
         if (!start) {
             start = performance.now();
         }
 
-        sampleBuffer = sampleBuffer.concat(Array.from(event.data));
-
-        totalSamples += event.data.length;
+        sampleBuffer = new Float32Array([...sampleBuffer, ...incomingSamples]);
+        totalSamples += incomingSamples.length;
         //console.log("Sample buffer length: ", sampleBuffer.length);
         
         if (sampleBuffer.length >= sampleBufferSize) {
-            console.log("Samples per second: ", totalSamples / ((performance.now() - start) / 1000));
+            const localSampleBuffer = sampleBuffer.subarray(0, sampleBufferSize);
+            sampleBuffer = sampleBuffer.subarray(sampleBufferSize);
+    
+            // Update largeBuffer by simulating a rolling buffer
+            largeBuffer.copyWithin(0, sampleBufferSize);
+            largeBuffer.set(localSampleBuffer, largeBufferSize - sampleBufferSize);
+    
+            const newSpecFeatures = tf.expandDims(featurizer(tf.tensor1d(largeBuffer)), 0);
+            const newAudioFeatures = encoder.predict(newSpecFeatures);
+    
+            const numNewFeatures = sampleBufferSize / hopSize / 2;
+            const audioFeatureBuffer = newAudioFeatures.slice([0, newAudioFeatures.shape[1] - numNewFeatures, 0], [1, numNewFeatures, newAudioFeatures.shape[2]]);
+    
+            allTokens = greedyDecode(audioFeatureBuffer, encoder, predictor, joint, allTokens);
+            updateLog(decodeTokens(allTokens, tokenizer));
+            //console.log(decodeTokens(allTokens, tokenizer));
 
-            // Process the current buffer
-            const localBuffer = sampleBuffer.slice(0, sampleBufferSize);
-
-            // TODO Is this quite right? needs a unit test 
-            sampleBuffer = sampleBuffer.slice(sampleBufferSize - (windowSize - hopSize));
-
-            // Save off the localBuffer
-            downloadAudio(localBuffer, 16000);
-
-            const features = tf.expandDims(featurizer(tf.tensor1d(localBuffer)), 0);
-
-           // console.log(features.shape);
-            const audioFeatures = encoder.predict(features);
-            console.log(audioFeatures.shape);
-
-            let result = greedyDecode(audioFeatures, encoder, predictor, joint);
-            console.log(decodeTokens(result, tokenizer));
+            // if (++totalRuns % 10 === 0) {
+            //     downloadAudio(largeBuffer, 16000);
+            // }
         }
-
-      
     };
     
     console.log("Listening...");

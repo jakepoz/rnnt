@@ -28,3 +28,6 @@ psycopg2-binary
 onnx
 onnxscript
 onnxsim
+
+# For audio augmentations during training
+torch-audiomentations
