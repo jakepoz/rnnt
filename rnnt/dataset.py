@@ -1,4 +1,5 @@
 import torch
+import torchaudio
 import datasets
 
 from rnnt.util import save_tensor_json
@@ -23,12 +24,14 @@ def get_librispeech_dataset(split: str, cache_dir="/media/datasets/librispeech_h
 
 # This class actually takes the raw audio and text data, applys any augmentations to them, and does the tokenization
 class AudioDatasetProcessor(torch.utils.data.Dataset):
-    def __init__(self, dataset, tokenizer, featurizer: torch.nn.Module, device: torch.device):
+    def __init__(self, dataset, tokenizer, featurizer: torch.nn.Module, device: torch.device, audio_augmentation=None):
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.featurizer = featurizer
 
         self.device = device
+
+        self.audio_augmentation = audio_augmentation
 
     def __len__(self):
         return len(self.dataset)
@@ -37,6 +40,10 @@ class AudioDatasetProcessor(torch.utils.data.Dataset):
         row = self.dataset[idx]
 
         audio = torch.from_numpy(row["audio"]["array"]).to(torch.float32).to(self.device)
+
+        if self.audio_augmentation is not None:
+            audio = self.audio_augmentation(audio.unsqueeze(-1), sample_rate=row["audio"]["sampling_rate"]).squeeze(-1)
+
         text = row["text"].lower()
 
         # with open("sampleaudio.json", "w") as f:

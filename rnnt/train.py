@@ -16,7 +16,7 @@ from rnnt.model import RNNTModel
 from rnnt.util import save_model, get_output_dir
 
 
-@hydra.main(version_base=None, config_path="config", config_name="basic_sp_conv.yaml")
+@hydra.main(version_base=None, config_path="config", config_name="basic_sp_convjs.yaml")
 def train(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     output_dir = get_output_dir(cfg)
@@ -48,7 +48,13 @@ def train(cfg: DictConfig) -> None:
 
     # Wrap those in the processor class, which can provide augmentations, tokenization, etc.
     ds_processor = hydra.utils.get_class(cfg.data.processor_class)
-    train_ds = ds_processor(train_ds, tokenizer, featurizer, torch.device("cpu"))
+
+    if hasattr(cfg.data, 'audio_augmentation'):
+        audio_augmentation = hydra.utils.instantiate(cfg.data.audio_augmentation)
+    else:
+        audio_augmentation = None
+
+    train_ds = ds_processor(train_ds, tokenizer, featurizer, torch.device("cpu"), audio_augmentation=audio_augmentation)
     eval_ds = ds_processor(eval_ds, tokenizer, featurizer, torch.device("cpu"))
 
     print(f"Train dataset size: {len(train_ds)}")

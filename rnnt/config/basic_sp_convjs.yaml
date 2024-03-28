@@ -120,6 +120,21 @@ datasets:
 data:
   processor_class: rnnt.dataset.AudioDatasetProcessor
 
+  audio_augmentation:
+    _target_: rnnt.augment.TimeDomainAugmentor
+    augmentations:
+      - _target_: rnnt.augment.ATempoAugmentation
+        p: 0.5
+        min_tempo_rate: 0.75
+        max_tempo_rate: 1.25
+      - _target_: rnnt.augment.PitchShiftAugmentation
+        p: 0.5
+        min_semitones: -3
+        max_semitones: 3
+      - _target_: rnnt.augment.TrimAugmentation
+        p: 0.5
+        max_trim: 0.02
+        
   train:
     dataset:
         - ${datasets.librispeech_100}
