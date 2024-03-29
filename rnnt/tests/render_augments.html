@@ -41,6 +41,14 @@
 </head>
 <body>
     <h1>Audio Augmentation Samples</h1>
+
+    <h2>Original Audio</h2>
+    <div class="augmentation">
+        <audio controls>
+            <source src="{{ original_audio }}" type="audio/wav">
+            Your browser does not support the audio element.
+        </audio>
+    </div>
     
     <h2>Individual Augmentations</h2>
     {% for aug_name, samples in individual_samples.items() %}
@@ -51,7 +59,9 @@
                 {% for param, value in augmentation_params[aug_name].items() %}
                     <li>{{ param }}: {{ value }}</li>
                 {% endfor %}
+                <li>p: 1.0 (forced)</li>
             </ul>
+            
             {% for sample_file in samples %}
                 <audio controls>
                     <source src="{{ sample_file }}" type="audio/wav">
@@ -83,5 +93,20 @@
             </audio>
         {% endfor %}
     </div>
+
+    <script>
+        const audioElements = document.querySelectorAll('audio');
+
+        audioElements.forEach(audio => {
+            audio.addEventListener('play', () => {
+                audioElements.forEach(otherAudio => {
+                    if (otherAudio !== audio && !otherAudio.paused) {
+                        otherAudio.pause();
+                        otherAudio.currentTime = 0;
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>
