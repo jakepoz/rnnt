@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Augmentation Samples</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #555;
+            margin-top: 40px;
+        }
+        .augmentation {
+            background-color: #fff;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .augmentation h3 {
+            color: #333;
+            margin-top: 0;
+        }
+        .augmentation p {
+            color: #777;
+            margin-bottom: 10px;
+        }
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Audio Augmentation Samples</h1>
+    
+    <h2>Individual Augmentations</h2>
+    {% for aug_name, samples in individual_samples.items() %}
+        <div class="augmentation">
+            <h3>{{ aug_name }}</h3>
+            <p>Parameters:</p>
+            <ul>
+                {% for param, value in augmentation_params[aug_name].items() %}
+                    <li>{{ param }}: {{ value }}</li>
+                {% endfor %}
+            </ul>
+            {% for sample_file in samples %}
+                <audio controls>
+                    <source src="{{ sample_file }}" type="audio/wav">
+                    Your browser does not support the audio element.
+                </audio>
+            {% endfor %}
+        </div>
+    {% endfor %}
+    
+    <h2>Combined Augmentations</h2>
+    <div class="augmentation">
+        <h3>Combined Augmentations</h3>
+        <p>Parameters:</p>
+        <ul>
+            {% for aug_name, params in augmentation_params.items() %}
+                <li>{{ aug_name }}:
+                    <ul>
+                        {% for param, value in params.items() %}
+                            <li>{{ param }}: {{ value }}</li>
+                        {% endfor %}
+                    </ul>
+                </li>
+            {% endfor %}
+        </ul>
+        {% for sample_file in combined_samples %}
+            <audio controls>
+                <source src="{{ sample_file }}" type="audio/wav">
+                Your browser does not support the audio element.
+            </audio>
+        {% endfor %}
+    </div>
+</body>
+</html>

@@ -16,6 +16,12 @@ class TimeDomainAugmentor():
         self.augmentations = augmentations
 
     def __call__(self, waveform: torch.Tensor, sample_rate: int) -> torch.Tensor:
+        if len(waveform.shape) != 2:
+            raise ValueError("Input waveform must be 2D")
+    
+        if waveform.shape[1] != 1:
+            raise ValueError("Input waveform must have a single channel in the second dimension")
+
         filters = []
 
         for aug in self.augmentations:
