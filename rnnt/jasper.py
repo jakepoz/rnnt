@@ -129,7 +129,7 @@ class AudioEncoder(torch.nn.Module):
 
         for module in self.blocks:
             if isinstance(module, CausalConv1d):
-                state.append(torch.zeros(batch_size, module.conv.in_channels, (module.conv.kernel_size[0] - 1) * module.conv.dilation[0]))
+                state.append(torch.zeros(batch_size, module.conv.in_channels, (module.conv.kernel_size[0] - 1) * module.conv.dilation[0] - module.conv.stride[0] + 1))
         
         return state
     

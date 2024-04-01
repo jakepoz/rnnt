@@ -78,49 +78,51 @@ class FeaturizerStreamingTest(unittest.TestCase):
         # and no additional context
         featurizer = TFJSSpectrogram(n_fft=400, hop_length=160, win_length=400, apply_linear_log=False, mean=15.0, invstddev=0.25)
     
-        input_stride = 1
+        input_stride = 2
+        for input_kernel, input_stride, input_dilation, output_kernel, output_stride, output_dilation in [
+            (3, 2, 3,  5, 1, 5),
+            # (3, 1, 1, 29, 1, 1),
+            # (3, 2, 1, 29, 1, 2),
+            # (10, 2, 1, 29, 1, 2),
+            # (11, 2, 1, 29, 1, 2),
+            # (11, 2, 1, 30, 1, 2),
+            # (3, 1, 3,  5, 1, 5),
+        ]:
+            with self.subTest("Testing prologue and epilogue", input_kernel=input_kernel, input_stride=input_stride, input_dilation=input_dilation, output_kernel=output_kernel, output_stride=output_stride, output_dilation=output_dilation):
+                encoder = AudioEncoder(
+                    input_features=201,
+                    prologue_kernel_size=input_kernel,
+                    prologue_stride=input_stride,
+                    prologue_dilation=input_dilation,
+                    blocks = [],
+                    epilogue_features=512,
+                    epilogue_kernel_size=output_kernel,
+                    epilogue_stride=output_stride,
+                    epilogue_dilation=output_dilation,
+                )
+                encoder.eval() # Turn off batch norm since we will have size 1 basically in a lot of places when streaming
 
-        encoder = AudioEncoder(
-            input_features=201,
-            prologue_kernel_size=11,
-            prologue_stride=input_stride,
-            prologue_dilation=1,
-            blocks = [],
-            epilogue_features=512,
-            epilogue_kernel_size=29,
-            epilogue_stride=1,
-            epilogue_dilation=2, # TODO Test dilation
-        )
-        encoder.eval() # Turn off batch norm since we will have size 1 basically in a lot of places when streaming
+                # Load a real audio file    
+                audio, sr = torchaudio.load("jake4.wav")
 
-        # Load a real audio file    
-        audio, sr = torchaudio.load("jake4.wav")
+                # Trim it to the nearest chunk size multiple, to simplify the test
+                chunk_size = 1280
+                audio = audio[:, :audio.shape[1] - (audio.shape[1] % 1280)]
 
-        # Trim it to the nearest chunk size multiple, to simplify the test
-        chunk_size = 1280
-        audio = audio[:, :audio.shape[1] - (audio.shape[1] % 1280)]
+                # Run it all at once as a reference
+                features = featurizer(audio)
+                full_output = encoder(features)
 
-        # Run it all at once as a reference
-        features = featurizer(audio)
-        full_output = encoder(features)
+                print(full_output.shape)
 
-        print(full_output.shape)
+                streaming_output = torch.zeros((1, full_output.shape[1], 0))
 
-        streaming_output = torch.zeros((1, full_output.shape[1], 0))
+                state = encoder.streaming_init_state(batch_size=1)
 
-        state = encoder.streaming_init_state(batch_size=1)
+                for i in range(0, features.shape[2], input_stride):
+                    result, state = encoder.streaming_forward(features[:, :, i: i + input_stride], state)
+                    streaming_output = torch.cat((streaming_output, result), dim=2)
 
-        for i in range(0, features.shape[2], input_stride):
-            result, state = encoder.streaming_forward(features[:, :, i: i + input_stride], state)
-            streaming_output = torch.cat((streaming_output, result), dim=2)
-
-
-        print(streaming_output.shape)
-
-        diff = full_output - streaming_output
-
-        print(torch.max(torch.abs(diff)))
-
-        self.assertTrue(torch.allclose(full_output, streaming_output, atol=1e-5))
+                self.assertTrue(torch.allclose(full_output, streaming_output, atol=1e-5))
 
 

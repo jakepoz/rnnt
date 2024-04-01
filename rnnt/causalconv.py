@@ -10,7 +10,7 @@ class CausalConv1d(torch.nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, dilation, additional_context: int = 0):
         super(CausalConv1d, self).__init__()
         self.conv = torch.nn.Conv1d(in_channels, out_channels, kernel_size, stride, dilation=dilation)
-        self.padding = (kernel_size - 1) * dilation
+        self.padding = (kernel_size - 1) * dilation - stride + 1
 
         if additional_context < 0:
             raise ValueError("additional_context must be non-negative")
