@@ -1,7 +1,9 @@
 import torch
 import unittest
+import math
+import matplotlib.pyplot as plt
 
-from rnnt.featurizer import TFJSSpectrogram
+from rnnt.featurizer import TFJSSpectrogram, _piecewise_linear_log
 
 class JavascriptFeaturizerTest(unittest.TestCase):
     def test_stft(self):
@@ -41,3 +43,31 @@ class JavascriptFeaturizerTest(unittest.TestCase):
         print(result.shape)
 
         print(result.T)
+
+    def test_plot_linearlog(self):
+        # Generate a range of x values
+        x_values = torch.linspace(0.1, 10, 1000) # Avoid starting at 0 to prevent log(0)
+
+        # Apply the piecewise function to these x values
+        y_values_piecewise = _piecewise_linear_log(x_values)
+
+        # Calculate the regular log values
+        y_values_log = torch.log(x_values)
+
+        # Plotting
+        plt.figure(figsize=(12, 8))
+        plt.plot(x_values.numpy(), y_values_piecewise.numpy(), label='Piecewise Linear-Log Function')
+        plt.plot(x_values.numpy(), y_values_log.numpy(), label='Log Function', linestyle='--')
+        plt.axvline(x=math.e, color='r', linestyle='--', label='x = e')
+        plt.axhline(y=1, color='g', linestyle='--', label='y = 1')
+        plt.title('Piecewise Linear-Log Function vs Regular Log Function')
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.legend()
+        plt.grid(True)
+
+        # Save the plot to a file
+        plt.savefig('piecewise_linear_log.png')
+
+        # Display the plot
+        plt.show()
