@@ -74,7 +74,7 @@ class AudioEncoder(torch.nn.Module):
         self.total_additional_context = 2 * 4 * 2 # 4 subblocks, 2 additional context each, but after a stride 2 downsampling
 
         # Prologue convolution to take 80-mel spectrograms, stride 2 to downsample
-        first_block_input_size = blocks[0].in_channels
+        first_block_input_size = blocks[0].in_channels if len(blocks) > 0 else epilogue_features
 
         self.blocks.append(CausalConv1d(input_features, first_block_input_size, prologue_kernel_size, prologue_stride, prologue_dilation))
 
@@ -91,7 +91,7 @@ class AudioEncoder(torch.nn.Module):
         self.blocks.extend(blocks)
 
         # Epilogue with dilation 2 and large kernel size
-        last_block_output_size = blocks[-1].out_channels
+        last_block_output_size = blocks[-1].out_channels if len(blocks) > 0 else first_block_input_size
 
         self.blocks.append(CausalConv1d(last_block_output_size, epilogue_features, epilogue_kernel_size, epilogue_stride, epilogue_dilation))
 
@@ -105,11 +105,33 @@ class AudioEncoder(torch.nn.Module):
         self.blocks.append(torch.nn.GELU())
 
         # Slightly different 1x1 convolution to get to the final features we will use later
-        self.blocks.append(CausalConv1d(epilogue_features, output_features, 1, 1, 1))
+        self.blocks.append(torch.nn.Conv1d(epilogue_features, output_features, kernel_size=1, stride=1, dilation=1))
 
     def forward(self, x):
         y = self.blocks(x)
         return y
+    
+    def streaming_forward(self, x, state):
+        state_index = 0
+
+        for module in self.blocks:
+            if isinstance(module, CausalConv1d):
+                x, new_state = module.streaming_forward(x, state[state_index])
+                state[state_index] = new_state
+                state_index += 1
+            else:
+                x = module(x)
+
+        return x, state
+    
+    def streaming_init_state(self, batch_size):
+        state = []
+
+        for module in self.blocks:
+            if isinstance(module, CausalConv1d):
+                state.append(torch.zeros(batch_size, module.conv.in_channels, (module.conv.kernel_size[0] - 1) * module.conv.dilation[0]))
+        
+        return state
     
     def calc_output_lens(self, input_lens):
         # ceiling of input_lens / stride

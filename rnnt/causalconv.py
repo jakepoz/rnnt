@@ -27,3 +27,13 @@ class CausalConv1d(torch.nn.Module):
     def forward(self, x):
         x = torch.nn.functional.pad(x, (self.left_padding, self.right_padding))
         return self.conv(x)
+    
+    def streaming_forward(self, x, state):
+        input = torch.cat((state, x), dim=2)
+        assert input.shape[2] == (self.conv.kernel_size[0] - 1) * self.conv.dilation[0] + 1
+        result = self.conv(input)
+
+        # Update the state
+        state = input[:, :, result.shape[2] * self.conv.stride[0]:]
+
+        return result, state
