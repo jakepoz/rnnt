@@ -3,7 +3,7 @@ import torchaudio
 import unittest
 
 from rnnt.featurizer import TFJSSpectrogram
-from rnnt.jasper import AudioEncoder
+from rnnt.jasper import AudioEncoder, JasperBlock
 
 # The idea here is to demo some code that produces the same results whether the audio has been run all at once
 # through the audio encoder, or has been run through in smaller chunks
@@ -70,7 +70,9 @@ class FeaturizerStreamingTest(unittest.TestCase):
 
         print(diff)
         print(torch.max(torch.abs(diff)))
-        
+
+
+class JasperStreamingTest(unittest.TestCase):
     def test_jasper_streaming_full_causal(self):
         # This code sets things up to run the audio encoder in a streaming fashion
 
@@ -81,12 +83,12 @@ class FeaturizerStreamingTest(unittest.TestCase):
         input_stride = 2
         for input_kernel, input_stride, input_dilation, output_kernel, output_stride, output_dilation in [
             (3, 2, 3,  5, 1, 5),
-            # (3, 1, 1, 29, 1, 1),
-            # (3, 2, 1, 29, 1, 2),
-            # (10, 2, 1, 29, 1, 2),
-            # (11, 2, 1, 29, 1, 2),
-            # (11, 2, 1, 30, 1, 2),
-            # (3, 1, 3,  5, 1, 5),
+            (3, 1, 1, 29, 1, 1),
+            (3, 2, 1, 29, 1, 2),
+            (10, 2, 1, 29, 1, 2),
+            (11, 2, 1, 29, 1, 2),
+            (11, 2, 1, 30, 1, 2),
+            (3, 1, 3,  5, 1, 5),
         ]:
             with self.subTest("Testing prologue and epilogue", input_kernel=input_kernel, input_stride=input_stride, input_dilation=input_dilation, output_kernel=output_kernel, output_stride=output_stride, output_dilation=output_dilation):
                 encoder = AudioEncoder(
@@ -125,4 +127,45 @@ class FeaturizerStreamingTest(unittest.TestCase):
 
                 self.assertTrue(torch.allclose(full_output, streaming_output, atol=1e-5))
 
+    def test_jasper_streaming_with_blocks(self):
+        featurizer = TFJSSpectrogram(n_fft=400, hop_length=160, win_length=400, apply_linear_log=False, mean=15.0, invstddev=0.25)
+    
+        input_stride = 2
 
+        encoder = AudioEncoder(
+                input_features=201,
+                prologue_kernel_size=11,
+                prologue_stride=input_stride,
+                prologue_dilation=1,
+                blocks = [
+                    JasperBlock(kernel_size=11, in_channels=256, out_channels=256, dropout=0.0, num_sub_blocks=4),
+                ],
+                epilogue_features=512,
+                epilogue_kernel_size=29,
+                epilogue_stride=1,
+                epilogue_dilation=2,
+            )
+        encoder.eval()
+
+        # Load a real audio file    
+        audio, sr = torchaudio.load("jake4.wav")
+
+        # Trim it to the nearest chunk size multiple, to simplify the test
+        chunk_size = 1280
+        audio = audio[:, :audio.shape[1] - (audio.shape[1] % 1280)]
+
+        # Run it all at once as a reference
+        features = featurizer(audio)
+        full_output = encoder(features)
+
+        print(full_output.shape)
+
+        streaming_output = torch.zeros((1, full_output.shape[1], 0))
+
+        state = encoder.streaming_init_state(batch_size=1)
+
+        for i in range(0, features.shape[2], input_stride):
+            result, state = encoder.streaming_forward(features[:, :, i: i + input_stride], state)
+            streaming_output = torch.cat((streaming_output, result), dim=2)
+
+        self.assertTrue(torch.allclose(full_output, streaming_output, atol=1e-5))

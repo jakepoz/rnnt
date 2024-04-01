@@ -55,6 +55,28 @@ class JasperBlock(torch.nn.Module):
             x = self.dropout(x)
 
         return x
+    
+    def streaming_forward(self, x, states):
+        input_x = x
+        new_states = []
+
+        residual_x = self.residual_conv(input_x)
+        residual_x = self.residual_norm(residual_x)
+
+        for index, (conv, norm) in enumerate(zip(self.convs, self.norms)):
+            x, new_state = conv.streaming_forward(x, states[index])
+            x = norm(x)
+
+            if index == self.num_sub_blocks - 1:
+                x = x + residual_x
+
+            # Using GELU instead of RELU here
+            x = torch.nn.functional.gelu(x)
+            x = self.dropout(x)
+
+            new_states.append(new_state)
+
+        return x, new_states
 
 
 # Convolutional Audio Encoder, based on nvidia nemo Jasper
@@ -119,6 +141,10 @@ class AudioEncoder(torch.nn.Module):
                 x, new_state = module.streaming_forward(x, state[state_index])
                 state[state_index] = new_state
                 state_index += 1
+            elif isinstance(module, JasperBlock):
+                x, new_states = module.streaming_forward(x, state[state_index:state_index + module.num_sub_blocks])
+                state[state_index:state_index + module.num_sub_blocks] = new_states
+                state_index += module.num_sub_blocks
             else:
                 x = module(x)
 
@@ -130,6 +156,9 @@ class AudioEncoder(torch.nn.Module):
         for module in self.blocks:
             if isinstance(module, CausalConv1d):
                 state.append(torch.zeros(batch_size, module.conv.in_channels, (module.conv.kernel_size[0] - 1) * module.conv.dilation[0] - module.conv.stride[0] + 1))
+            if isinstance(module, JasperBlock):
+                for i in range(module.num_sub_blocks):
+                    state.append(torch.zeros(batch_size, module.out_channels, (module.convs[i].conv.kernel_size[0] - 1) * module.convs[i].conv.dilation[0] - module.convs[i].conv.stride[0] + 1))
         
         return state
     
