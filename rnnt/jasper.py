@@ -5,6 +5,13 @@ from typing import Literal
 from .causalconv import CausalConv1d
 
 # Basic design from https://arxiv.org/pdf/1904.03288.pdf
+
+# A note regarding normalization
+# BatchNorm works only okay, because the batch size is actually pretty low during training (ex. 4)
+# Though the fact that the sequence length is long means that it's not that bad
+# But performance was a bit better with instance norm
+# However, you have to be careful, because in streaming mode, the instance norm is calculated over a much
+# smaller sequence length, so we use track_running_stats=True to use a better estimate of the mean and variance
 class JasperBlock(torch.nn.Module):
     def __init__(self, kernel_size, in_channels, out_channels, dropout, num_sub_blocks, norm_type: Literal["batch", "instance", "instance_affine"] = "batch", additional_context: int = 0):
         super(JasperBlock, self).__init__()
@@ -22,18 +29,18 @@ class JasperBlock(torch.nn.Module):
             if norm_type == "batch":
                 self.norms.append(torch.nn.BatchNorm1d(out_channels))
             elif norm_type == "instance":
-                self.norms.append(torch.nn.InstanceNorm1d(out_channels))
+                self.norms.append(torch.nn.InstanceNorm1d(out_channels, track_running_stats=True))
             elif norm_type == "instance_affine":
-                self.norms.append(torch.nn.InstanceNorm1d(out_channels, affine=True))
+                self.norms.append(torch.nn.InstanceNorm1d(out_channels, track_running_stats=True, affine=True))
 
         self.residual_conv = torch.nn.Conv1d(in_channels, out_channels, 1)
 
         if norm_type == "batch":
             self.residual_norm = torch.nn.BatchNorm1d(out_channels)
         elif norm_type == "instance":
-            self.residual_norm = torch.nn.InstanceNorm1d(out_channels)
+            self.residual_norm = torch.nn.InstanceNorm1d(out_channels, track_running_stats=True)
         elif norm_type == "instance_affine":
-            self.residual_norm = torch.nn.InstanceNorm1d(out_channels, affine=True)
+            self.residual_norm = torch.nn.InstanceNorm1d(out_channels, track_running_stats=True, affine=True)
 
         self.dropout = torch.nn.Dropout(dropout)
         
@@ -103,9 +110,9 @@ class AudioEncoder(torch.nn.Module):
         if norm_type == "batch":
             self.blocks.append(torch.nn.BatchNorm1d(first_block_input_size))
         elif norm_type == "instance":
-            self.blocks.append(torch.nn.InstanceNorm1d(first_block_input_size))
+            self.blocks.append(torch.nn.InstanceNorm1d(first_block_input_size, track_running_stats=True))
         elif norm_type == "instance_affine":
-            self.blocks.append(torch.nn.InstanceNorm1d(first_block_input_size, affine=True))
+            self.blocks.append(torch.nn.InstanceNorm1d(first_block_input_size, track_running_stats=True, affine=True))
 
         self.blocks.append(torch.nn.GELU())
 
@@ -120,9 +127,9 @@ class AudioEncoder(torch.nn.Module):
         if norm_type == "batch":
             self.blocks.append(torch.nn.BatchNorm1d(epilogue_features))
         elif norm_type == "instance":
-            self.blocks.append(torch.nn.InstanceNorm1d(epilogue_features))
+            self.blocks.append(torch.nn.InstanceNorm1d(epilogue_features, track_running_stats=True))
         elif norm_type == "instance_affine":
-            self.blocks.append(torch.nn.InstanceNorm1d(epilogue_features, affine=True))
+            self.blocks.append(torch.nn.InstanceNorm1d(epilogue_features, track_running_stats=True, affine=True))
 
         self.blocks.append(torch.nn.GELU())
 
@@ -158,7 +165,8 @@ class AudioEncoder(torch.nn.Module):
                 state.append(torch.zeros(batch_size, module.conv.in_channels, (module.conv.kernel_size[0] - 1) * module.conv.dilation[0] - module.conv.stride[0] + 1))
             if isinstance(module, JasperBlock):
                 for i in range(module.num_sub_blocks):
-                    state.append(torch.zeros(batch_size, module.out_channels, (module.convs[i].conv.kernel_size[0] - 1) * module.convs[i].conv.dilation[0] - module.convs[i].conv.stride[0] + 1))
+                    sub_in_channels = module.in_channels if i == 0 else module.out_channels
+                    state.append(torch.zeros(batch_size, sub_in_channels, (module.convs[i].conv.kernel_size[0] - 1) * module.convs[i].conv.dilation[0] - module.convs[i].conv.stride[0] + 1))
         
         return state
     

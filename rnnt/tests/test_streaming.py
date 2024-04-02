@@ -1,6 +1,9 @@
 import torch
 import torchaudio
 import unittest
+import yaml
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 from rnnt.featurizer import TFJSSpectrogram
 from rnnt.jasper import AudioEncoder, JasperBlock
@@ -146,6 +149,41 @@ class JasperStreamingTest(unittest.TestCase):
                 epilogue_dilation=2,
             )
         encoder.eval()
+
+        # Load a real audio file    
+        audio, sr = torchaudio.load("jake4.wav")
+
+        # Trim it to the nearest chunk size multiple, to simplify the test
+        chunk_size = 1280
+        audio = audio[:, :audio.shape[1] - (audio.shape[1] % 1280)]
+
+        # Run it all at once as a reference
+        features = featurizer(audio)
+        full_output = encoder(features)
+
+        print(full_output.shape)
+
+        streaming_output = torch.zeros((1, full_output.shape[1], 0))
+
+        state = encoder.streaming_init_state(batch_size=1)
+
+        for i in range(0, features.shape[2], input_stride):
+            result, state = encoder.streaming_forward(features[:, :, i: i + input_stride], state)
+            streaming_output = torch.cat((streaming_output, result), dim=2)
+
+        self.assertTrue(torch.allclose(full_output, streaming_output, atol=1e-5))
+
+    def test_with_real_yaml_config(self):
+        config_path = "rnnt/config/basic_sp_convjs_fullcausal.yaml"
+
+        with open(config_path, "r") as f:
+            cfg = OmegaConf.create(yaml.safe_load(f))
+
+        featurizer = hydra.utils.instantiate(cfg.featurizer)
+        encoder = hydra.utils.instantiate(cfg.encoder)
+        encoder.eval()
+
+        input_stride = 2
 
         # Load a real audio file    
         audio, sr = torchaudio.load("jake4.wav")
