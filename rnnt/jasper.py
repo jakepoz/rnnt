@@ -171,5 +171,14 @@ class AudioEncoder(torch.nn.Module):
         return state
     
     def calc_output_lens(self, input_lens):
-        # ceiling of input_lens / stride
-        return torch.ceil(input_lens / self.prologue_stride).int()
+        output_lens = input_lens.clone()
+        for module in self.blocks:
+            if isinstance(module, CausalConv1d):
+                # Calculate output lengths considering left padding, stride, kernel size, and dilation
+                padding = module.left_padding
+                stride = module.conv.stride[0]
+                kernel_size = module.conv.kernel_size[0]
+                dilation = module.conv.dilation[0]
+                output_lens = ((output_lens + padding - dilation * (kernel_size - 1) - 1) // stride + 1)
+
+        return output_lens

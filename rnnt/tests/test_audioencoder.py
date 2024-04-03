@@ -139,12 +139,9 @@ class AudioEncoderTest(unittest.TestCase):
             ]
         )
         
-        x = torch.randn(1, 80, 10) # (N, C, L)
-        y = encoder(x)
-        self.assertEqual(y.shape, (1, 1024, 5))
-        self.assertEqual(encoder.calc_output_lens(torch.tensor([10])).item(), 5)
-
-        x = torch.randn(1, 80, 11) # (N, C, L)
-        y = encoder(x)
-        self.assertEqual(y.shape, (1, 1024, 6))
-        self.assertEqual(encoder.calc_output_lens(torch.tensor([11])).item(), 6)
+        for i in range(10, 30):
+            x = torch.randn(1, 80, i) # (N, C, L)
+            y = encoder(x)
+            #self.assertEqual(y.shape, (1, 1024, 5))
+            print(y.shape)
+            self.assertEqual(encoder.calc_output_lens(torch.tensor([i])).item(), y.shape[2], f"Error when length={i}")

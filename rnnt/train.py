@@ -119,7 +119,7 @@ def train(cfg: DictConfig) -> None:
             # Calculate the loss
             loss = torchaudio.functional.rnnt_loss(logits=joint_features, 
                                                    targets=input_ids.int(),
-                                                   logit_lengths=audio_feature_lens,
+                                                   logit_lengths=audio_feature_lens.int(),
                                                    target_lengths=input_id_lens.int(), 
                                                    blank=-1,
                                                    clamp=cfg.training.rnnt_grad_clamp,

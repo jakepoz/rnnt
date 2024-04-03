@@ -1,0 +1,164 @@
+model_name: "basic_char_convjs"
+
+num_text_tokens: 1023
+num_total_symbols: 1024
+blank_idx: 1023
+
+tokenizer:
+  _target_: sentencepiece.SentencePieceProcessor
+  model_file: /home/jake/rnnt/spm_unigram_1023.model
+
+featurizer:
+  _target_: rnnt.featurizer.TFJSSpectrogram
+  n_fft: 400
+  win_length: 400
+  hop_length: 160
+  apply_linear_log: True
+  mean: [-3.43, -3.10, -2.75, -2.16, -1.64, -1.45, -1.69, -2.04, -2.16, -2.15, -2.16, -2.24, -2.38, -2.54, -2.74, -2.95, -3.15, -3.33, -3.47, -3.58, -3.68, -3.77, -3.85, -3.91, -3.97, -4.01, -4.05, -4.08, -4.11, -4.14, -4.16, -4.18, -4.19, -4.19, -4.19, -4.19, -4.18, -4.17, -4.17, -4.17, -4.18, -4.19, -4.20, -4.21, -4.23, -4.25, -4.27, -4.29, -4.31, -4.33, -4.35, -4.36, -4.38, -4.39, -4.40, -4.40, -4.40, -4.40, -4.40, -4.40, -4.40, -4.39, -4.39, -4.39, -4.40, -4.41, -4.42, -4.43, -4.44, -4.45, -4.46, -4.47, -4.48, -4.49, -4.50, -4.50, -4.51, -4.51, -4.52, -4.54, -4.55, -4.56, -4.57, -4.57, -4.58, -4.58, -4.59, -4.60, -4.61, -4.61, -4.62, -4.63, -4.63, -4.64, -4.64, -4.65, -4.65, -4.66, -4.66, -4.67, -4.67, -4.68, -4.69, -4.70, -4.70, -4.71, -4.72, -4.72, -4.73, -4.73, -4.74, -4.74, -4.75, -4.76, -4.76, -4.77, -4.77, -4.78, -4.78, -4.79, -4.79, -4.80, -4.80, -4.81, -4.81, -4.81, -4.82, -4.82, -4.82, -4.83, -4.83, -4.83, -4.83, -4.84, -4.84, -4.84, -4.85, -4.85, -4.85, -4.86, -4.86, -4.86, -4.86, -4.87, -4.87, -4.87, -4.88, -4.88, -4.88, -4.88, -4.88, -4.89, -4.89, -4.89, -4.89, -4.89, -4.90, -4.90, -4.90, -4.90, -4.91, -4.91, -4.91, -4.91, -4.92, -4.92, -4.92, -4.92, -4.92, -4.93, -4.93, -4.93, -4.93, -4.93, -4.94, -4.94, -4.94, -4.94, -4.94, -4.95, -4.95, -4.95, -4.95, -4.95, -4.95, -4.96, -4.96, -4.96, -4.96, -4.96, -4.96, -4.96, -4.96, -4.96, -4.96, -4.97, -4.97, -4.97, -4.97, -4.97, -4.99]
+  invstddev: [0.42, 0.44, 0.39, 0.33, 0.31, 0.30, 0.31, 0.33, 0.33, 0.33, 0.33, 0.33, 0.34, 0.35, 0.36, 0.37, 0.39, 0.41, 0.43, 0.44, 0.46, 0.48, 0.50, 0.51, 0.53, 0.54, 0.55, 0.56, 0.57, 0.57, 0.58, 0.59, 0.59, 0.60, 0.60, 0.60, 0.60, 0.60, 0.60, 0.60, 0.61, 0.61, 0.62, 0.63, 0.63, 0.64, 0.66, 0.67, 0.68, 0.69, 0.70, 0.71, 0.72, 0.73, 0.73, 0.74, 0.74, 0.74, 0.74, 0.74, 0.74, 0.73, 0.73, 0.73, 0.74, 0.74, 0.75, 0.76, 0.77, 0.78, 0.78, 0.79, 0.80, 0.80, 0.81, 0.81, 0.82, 0.82, 0.83, 0.84, 0.85, 0.86, 0.86, 0.87, 0.87, 0.88, 0.88, 0.89, 0.89, 0.90, 0.91, 0.91, 0.92, 0.92, 0.93, 0.93, 0.94, 0.94, 0.95, 0.95, 0.96, 0.96, 0.97, 0.98, 0.98, 0.99, 0.99, 1.00, 1.00, 1.01, 1.01, 1.02, 1.03, 1.03, 1.04, 1.05, 1.05, 1.06, 1.06, 1.07, 1.08, 1.09, 1.10, 1.10, 1.11, 1.11, 1.11, 1.12, 1.13, 1.13, 1.14, 1.15, 1.15, 1.15, 1.16, 1.17, 1.17, 1.18, 1.18, 1.19, 1.20, 1.21, 1.21, 1.22, 1.23, 1.24, 1.25, 1.26, 1.26, 1.27, 1.27, 1.28, 1.29, 1.29, 1.30, 1.31, 1.32, 1.33, 1.33, 1.35, 1.36, 1.37, 1.38, 1.39, 1.40, 1.41, 1.42, 1.43, 1.44, 1.45, 1.46, 1.47, 1.47, 1.48, 1.49, 1.50, 1.51, 1.52, 1.53, 1.54, 1.55, 1.56, 1.57, 1.57, 1.58, 1.59, 1.59, 1.60, 1.60, 1.61, 1.61, 1.62, 1.62, 1.63, 1.63, 1.63, 1.64, 1.64, 1.64, 1.65, 1.74]
+
+predictor:
+ _target_: rnnt.predictor.ConvPredictor
+ num_symbols: ${num_total_symbols} 
+ output_dim: 1024
+ symbol_embedding_dim: 512
+ dropout: 0.3
+
+encoder:
+  _target_: rnnt.jasper.AudioEncoder
+  input_features: 201
+  norm_type: instance_affine
+  prologue_kernel_size: 11
+  prologue_stride: 2
+  blocks:
+    - _target_: rnnt.jasper.JasperBlock
+      kernel_size: 11
+      in_channels: 256
+      out_channels: 256
+      dropout: 0.2
+      num_sub_blocks: 4
+      norm_type: instance_affine
+    - _target_: rnnt.jasper.JasperBlock
+      kernel_size: 13
+      in_channels: 256
+      out_channels: 384
+      dropout: 0.2
+      num_sub_blocks: 4   
+      norm_type: instance_affine   
+    - _target_: rnnt.jasper.JasperBlock
+      kernel_size: 25
+      in_channels: 384
+      out_channels: 512
+      dropout: 0.3
+      num_sub_blocks: 4                
+      norm_type: instance_affine
+  epilogue_features: 512
+  epilogue_kernel_size: 29
+  epilogue_dilation: 2
+  output_features: 1024
+
+joint:
+  _target_: rnnt.joint.JointNetwork
+  # -1 disables the extra Linear layer for those features
+  audio_features: -1 
+  text_features: -1
+  hidden_features: 1024
+  num_classes: ${num_total_symbols}
+
+
+
+training:
+  mixed_precision: fp32
+  num_epochs: 1
+  log_steps: 2000
+  eval_steps: 20000
+  checkpoint_steps: 100000
+  max_joint_size: 160000
+
+
+  pergpu_minibatch_size: 4
+  #perstep_batch_size: 256
+
+  clip_grad_norm: 10.0
+  rnnt_grad_clamp: -1
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 3e-4
+    eps: 1e-8
+    betas: [0.95, 0.9999]
+    weight_decay: 0.01
+  
+  lr_scheduler:
+    _target_: rnnt.lr_sched.WarmupCosineDecayLR
+    warmup_steps: 2000
+    min_lr_ratio: 0.05
+    total_steps: ???
+
+
+datasets:
+  cache_dir: /media/datasets/librispeech_hf
+
+  librispeech_100:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "train.clean.100"
+    cache_dir: ${datasets.cache_dir}
+  librispeech_360:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "train.clean.360"
+    cache_dir: ${datasets.cache_dir}
+  librispeech_500:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "train.other.500"
+    cache_dir: ${datasets.cache_dir}
+  librispeech_validation:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "validation.clean"
+    cache_dir: ${datasets.cache_dir}
+
+data:
+  processor_class: rnnt.dataset.AudioDatasetProcessor
+
+  audio_augmentation:
+    _target_: rnnt.augment.TimeDomainAugmentor
+    augmentations:
+      - _target_: rnnt.augment.ATempoAugmentation
+        p: 0.5
+        min_tempo_rate: 0.75
+        max_tempo_rate: 1.25
+      - _target_: rnnt.augment.PitchShiftAugmentation
+        p: 0.5
+        min_semitones: -3
+        max_semitones: 3
+      - _target_: rnnt.augment.TrimAugmentation
+        p: 0.5
+        max_trim: 0.02
+        
+  train:
+    dataset:
+        - ${datasets.librispeech_100}
+        - ${datasets.librispeech_360}
+        - ${datasets.librispeech_500}
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: ${training.pergpu_minibatch_size}
+      shuffle: True
+      num_workers: 4
+      collate_fn:
+        _target_: rnnt.dataset.AudioDatasetCollator
+
+  eval:
+    dataset: ${datasets.librispeech_validation}
+    max_elements: 1000
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: 1
+      shuffle: False
+      collate_fn:
+        _target_: rnnt.dataset.AudioDatasetCollator
+
+
+
+

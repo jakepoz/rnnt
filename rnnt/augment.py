@@ -3,9 +3,14 @@ import torchaudio
 from torchaudio.io import AudioEffector, CodecConfig
 
 # Time-domain augmentations for audio data, inspired by https://github.com/asteroid-team/torch-audiomentations
-class FFMpegAugmentation():
+class TimeDomainAugmentation():
     def __init__(self, p: float):
         self.p = p
+
+
+class FFMpegAugmentation(TimeDomainAugmentation):
+    def __init__(self, p: float):
+        super(FFMpegAugmentation, self).__init__(p)
 
     def filter_string(self, waveform: torch.Tensor, sample_rate: int) -> str:
         raise NotImplementedError

@@ -2,15 +2,17 @@ import torch
 import torchaudio
 import math
 
-_decibel = 2 * 20 * math.log10(torch.iinfo(torch.int16).max)
-_gain = pow(10, 0.05 * _decibel)
 
+# Piecewise function goes log for values > x_cutoff, and linear for values < x_cutoff
+# This is useful, because there is not much difference for us if your value is 10e-3 or 10e-9, but that's a big
+# difference in log space
+def piecewise_linear_log(x, x_cutoff=10e-3, slope=50):
+    y_transition = math.log(x_cutoff)
+    intercept_c = y_transition - slope * x_cutoff
 
-def _piecewise_linear_log(x):
-    x = x * _gain
-    x[x > math.e] = torch.log(x[x > math.e])
-    x[x <= math.e] = x[x <= math.e] / math.e
-    return x
+    log_part = torch.log(x)
+    linear_part = slope * x + intercept_c
+    return torch.where(x > x_cutoff, log_part, linear_part)
 
 
 class NormalizedSpectrogram(torchaudio.transforms.Spectrogram):
@@ -25,7 +27,7 @@ class NormalizedSpectrogram(torchaudio.transforms.Spectrogram):
         mel_spec = super().forward(waveform)
 
         if self.apply_linear_log:
-            mel_spec = _piecewise_linear_log(mel_spec + 1e-6)
+            mel_spec = _piecewise_linear_log(mel_spec)
 
         mel_spec = (mel_spec - self.mean) * self.invstddev
 
@@ -52,7 +54,7 @@ class NormalizedMelSpectrogram(torchaudio.transforms.MelSpectrogram):
     
 
 class TFJSSpectrogram(torch.nn.Module):
-    def __init__(self, n_fft: int, hop_length: int, win_length:int, apply_linear_log: bool=True, mean: float=15.0, invstddev: float=0.2) -> None:
+    def __init__(self, n_fft: int, hop_length: int, win_length:int, apply_linear_log: bool=True, mean: float=15.0, invstddev: float=0.25) -> None:
         super().__init__()
         self.n_fft = n_fft
         self.hop_length = hop_length
@@ -74,20 +76,19 @@ class TFJSSpectrogram(torch.nn.Module):
     def forward(self, waveform):
         spec = torch.stft(waveform, self.n_fft, self.hop_length, self.win_length, 
                           window=torch.hann_window(self.win_length),
-                          center=True,
+                          center=False,
                           onesided=True,
                           normalized=False,
                           return_complex=True)
         
         spec = spec.abs().pow(2.0)
-
+        
         if self.apply_linear_log:
-            spec = _piecewise_linear_log(spec + 1e-6)
-
+            spec = piecewise_linear_log(spec, x_cutoff=10e-3, slope=50)
+        
         if isinstance(self.mean, float):
             spec = (spec - self.mean) * self.invstddev
         else:
             spec = (spec - self.mean.unsqueeze(-1)) * self.invstddev.unsqueeze(-1)
-
 
         return spec

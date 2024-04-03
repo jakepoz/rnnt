@@ -10,8 +10,7 @@
             "request": "launch",
             "module": "rnnt.train",
             "args": [
-                "--config-name", "basic_sp_convjs_globalfeat.yaml",
-                "training.checkpoint_steps=20000",
+                "--config-name", "basic_sp_convjs_fullcausal.yaml",
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "1"
@@ -39,17 +38,20 @@
             "justMyCode": true
         },
         {
-            "name": "Python: Calc Global Features",
+            "name": "Python: Augments",
             "type": "python",
             "request": "launch",
-            "module": "rnnt.calc_global_features",
+            "module": "rnnt.tests.render_augments",
+            "args": [
+                "rnnt/config/basic_sp_convjs.yaml"
+            ],
             "justMyCode": true
         },
         {
-            "name": "Python: Optuna",
+            "name": "Python: Global Features",
             "type": "python",
             "request": "launch",
-            "module": "rnnt.optuna",
+            "module": "rnnt.calc_global_features",
             "justMyCode": true
         },
         {
@@ -58,10 +60,21 @@
             "request": "launch",
             "module": "rnnt.infer",
             "args": [
+                //"/home/jake/rnnt/experiments/basic_char/run-16/checkpoint_step_300000.pt",
                 "/home/jake/rnnt/experiments/basic_char_convjs/run-4/checkpoint_step_70311.pt",
-                "/home/jake/rnnt/audio(2).wav"
+                "/home/jake/rnnt/jake4.wav"
             ],
             "justMyCode": true
+        },
+        {
+            "name": "Python: Tests",
+            "type": "python",
+            "request": "launch",
+            "module": "unittest",
+            "args": [
+               "rnnt.tests.test_streaming.JasperStreamingTest.test_with_real_yaml_config"
+            ],
+            "justMyCode": false
         },
         {
             "name": "Launch via NPM",
