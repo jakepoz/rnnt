@@ -48,7 +48,7 @@ export class FeatureStreamer {
         this.hop_length = 160;
         this.win_length = 400;
 
-        this.chunk_size = 1280;
+        this.chunk_size = 3200;
         this.overlap = this.win_length - this.hop_length;
     }
 

@@ -13,7 +13,7 @@ pushd export
 source activate onnx2tf
 
 # Also passing -coion to keep input output names the same, otherwise they can get reordered and it's a pain to debug why the joiner doesn't work anymore
-onnx2tf -i encoder_streaming.onnx -ois "mel_features:1,201,2" -osd -coion -o saved_model_encoder_streaming
+onnx2tf -i encoder_streaming.onnx -ois "mel_features:1,201,20" -osd -coion -o saved_model_encoder_streaming
 
 onnx2tf -i encoder.onnx -b1 -osd -o saved_model_encoder
 

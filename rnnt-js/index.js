@@ -5,7 +5,7 @@ import '@tensorflow/tfjs-backend-wasm';
 
 import { setThreadsCount, getThreadsCount } from "@tensorflow/tfjs-backend-wasm";
 
-import { featurizer } from './featurizer';
+import { featurizer, FeatureStreamer } from './featurizer';
 import { downloadAudio } from "./wav";
 
 function updateLog(...args) {
@@ -69,7 +69,7 @@ function greedyDecode(audioFeatures, predictor, joint, max_length = 200) {
     let allAudioSlices = tf.split(audioFeatures, audioFeatures.shape[1], 1);
 
     // Get the latest token for prediction
-    let predictor_feature_slice = predictor.predict(input_ids);
+    let predictor_feature_slice = predictor.execute(input_ids);
     predictor_feature_slice = predictor_feature_slice.slice([0, predictor_feature_slice.shape[1] - 1, 0], [1, 1, predictor_feature_slice.shape[2]]);
 
 
@@ -79,8 +79,8 @@ function greedyDecode(audioFeatures, predictor, joint, max_length = 200) {
         const audio_feature_slice = allAudioSlices[cur_audio_time];
   
         // Compute joint features for the current audio and predictor features
-        //const joint_features = joint.predict([audio_feature_slice, predictor_feature_slice]);
-        const joint_features = joint.predict({text_frame: predictor_feature_slice, audio_frame: audio_feature_slice});
+        //const joint_features = joint.execute([audio_feature_slice, predictor_feature_slice]);
+        const joint_features = joint.execute({text_frame: predictor_feature_slice, audio_frame: audio_feature_slice});
         const joint_logits = joint_features.squeeze([0]);
 
         // Get the most likely token index
@@ -97,7 +97,7 @@ function greedyDecode(audioFeatures, predictor, joint, max_length = 200) {
             // Update input_ids for the next prediction
             input_ids = tf.tensor2d([tokens], [1, tokens.length], 'int32');
 
-            predictor_feature_slice = predictor.predict(input_ids);
+            predictor_feature_slice = predictor.execute(input_ids);
             predictor_feature_slice = predictor_feature_slice.slice([0, predictor_feature_slice.shape[1] - 1, 0], [1, 1, predictor_feature_slice.shape[2]]);
         
             cur_outputs_per_step += 1;
@@ -115,7 +115,7 @@ function incrementalGreedyDecode(audioFeatures, predictor, joint, state) {
     if (!state) {
         state = {
             tokens: [blank_idx], 
-            predictor_feature_slice: predictor.predict(tf.tensor2d([[blank_idx]], [1, 1], 'int32')),
+            predictor_feature_slice: predictor.execute(tf.tensor2d([[blank_idx]], [1, 1], 'int32')),
         }
     }
 
@@ -128,7 +128,7 @@ function incrementalGreedyDecode(audioFeatures, predictor, joint, state) {
         const audio_feature_slice = allAudioSlices[cur_audio_time];
   
         // Compute joint features for the current audio and predictor features
-        const joint_features = joint.predict({text_frame: state.predictor_feature_slice, audio_frame: audio_feature_slice});
+        const joint_features = joint.execute({text_frame: state.predictor_feature_slice, audio_frame: audio_feature_slice});
         const joint_logits = joint_features.squeeze([0]);
 
         // Get the most likely token index
@@ -142,7 +142,7 @@ function incrementalGreedyDecode(audioFeatures, predictor, joint, state) {
 
             // Update input_ids for the next prediction, TODO you can optimize this for long lengths by figuring out what the receptive field is
             let input_ids = tf.tensor2d([state.tokens], [1, state.tokens.length], 'int32');
-            let new_prediction = predictor.predict(input_ids);
+            let new_prediction = predictor.execute(input_ids);
             state.predictor_feature_slice = new_prediction.slice([0, new_prediction.shape[1] - 1, 0], [1, 1, new_prediction.shape[2]]);
         
             cur_outputs_per_step += 1;
@@ -183,6 +183,7 @@ async function doSampleInference(encoder, encoderStreaming, predictor, joint, to
     console.log("audioData.shape: ", audioData.shape);
 
     const spec_features = tf.expandDims(featurizer(audioData), 0);
+    //const spec_features = tf.zeros([1, 657, 201]);
     console.log("Featurizing!");
     console.log(spec_features.shape);
     spec_features.print();
@@ -191,7 +192,7 @@ async function doSampleInference(encoder, encoderStreaming, predictor, joint, to
     spec_features.slice([0, 100, 0], [1, 1, 201]).print();
 
     // Convert the mel data to audio features
-    const audioFeatures = encoder.predict(spec_features);
+    const audioFeatures = encoder.execute(spec_features);
     console.log("audioFeatures.shape: ", audioFeatures.shape);
 
     console.time('greedyDecode');
@@ -222,10 +223,12 @@ async function doSampleInference(encoder, encoderStreaming, predictor, joint, to
 
     let startTime = performance.now();
 
-    for (let i = 0; i < spec_features.shape[1] - (spec_features.shape[1] % 2); i+=2) {
-        let firstSpecFeatures = spec_features.slice([0, i, 0], [1, 2, 201]);
+    const streaming_feature_step = 20;
 
-        let streamingResult = encoderStreaming.predict({
+    for (let i = 0; i < spec_features.shape[1] - (spec_features.shape[1] % streaming_feature_step); i+=streaming_feature_step) {
+        let firstSpecFeatures = spec_features.slice([0, i, 0], [1, streaming_feature_step, 201]);
+
+        let streamingResult = encoderStreaming.execute({
             mel_features: firstSpecFeatures,
             ...state
         });
@@ -262,7 +265,7 @@ async function doSampleInference(encoder, encoderStreaming, predictor, joint, to
 }
 
 
-async function startListening(encoder, predictor, joint, tokenizer) {
+async function startListening(encoderStreaming, predictor, joint, tokenizer) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         console.error("Browser API navigator.mediaDevices.getUserMedia not available");
         updateLog("Error: Browser does not support required media devices.");
@@ -287,50 +290,63 @@ async function startListening(encoder, predictor, joint, tokenizer) {
 
     console.log("Connected audio source to processor node", audioContext.sampleRate);
 
-    let allTokens = [];
-    
-    const hopSize = 160, windowSize = 400;
-    const sampleBufferSize = 1280;
-    const largeBufferSize = 32000;
-    let largeBuffer = new Float32Array(largeBufferSize);
-    let sampleBuffer = new Float32Array(0);
+    let decoderState = null;
+    let featureStreamer = new FeatureStreamer();
 
-    let start = null;
-    let totalSamples = 0, totalRuns = 0;
+    let encoderState = {
+        input_state_0: tf.zeros([1, 9, 201]),
+        input_state_1: tf.zeros([1, 10, 256]),
+        input_state_2: tf.zeros([1, 10, 256]),
+        input_state_3: tf.zeros([1, 10, 256]),
+        input_state_4: tf.zeros([1, 10, 256]),
+        input_state_5: tf.zeros([1, 12, 256]),
+        input_state_6: tf.zeros([1, 12, 384]),
+        input_state_7: tf.zeros([1, 12, 384]),
+        input_state_8: tf.zeros([1, 12, 384]),
+        input_state_9: tf.zeros([1, 24, 384]),
+        input_state_10: tf.zeros([1, 24, 512]),
+        input_state_11: tf.zeros([1, 24, 512]),
+        input_state_12: tf.zeros([1, 24, 512]),
+        input_state_13: tf.zeros([1, 56, 512]),
+    }
+  
 
     audioProcessorNode.port.onmessage = (event) => {
         const incomingSamples = new Float32Array(event.data);
         
-        if (!start) {
-            start = performance.now();
-        }
+        const audioFeatures = featureStreamer.process(incomingSamples);
 
-        sampleBuffer = new Float32Array([...sampleBuffer, ...incomingSamples]);
-        totalSamples += incomingSamples.length;
-        //console.log("Sample buffer length: ", sampleBuffer.length);
+        if (audioFeatures) {
+            let streamingResult = encoderStreaming.execute({
+                mel_features: audioFeatures.expandDims(0),
+                ...encoderState
+            });
+
+            let newAudioFeatures = streamingResult[1];
+
+            // This is a horrible destructuring, because the model outputs get scrambled during the conversion process
+            // So you need to just generate this table by hand for now
+            encoderState = {
+                input_state_0: streamingResult[7],
+                input_state_1: streamingResult[0],
+                input_state_2: streamingResult[10],
+                input_state_3: streamingResult[9],
+                input_state_4: streamingResult[2],
+                input_state_5: streamingResult[4],
+                input_state_6: streamingResult[11],
+                input_state_7: streamingResult[12],
+                input_state_8: streamingResult[6],
+                input_state_9: streamingResult[8],
+                input_state_10: streamingResult[5],
+                input_state_11: streamingResult[14],
+                input_state_12: streamingResult[3],
+                input_state_13: streamingResult[13],
+            }
+
+            decoderState = incrementalGreedyDecode(newAudioFeatures, predictor, joint, decoderState);
+            console.log("Streaming tokens: ", decodeTokens(decoderState.tokens.slice(1), tokenizer));
+        }
         
-        if (sampleBuffer.length >= sampleBufferSize) {
-            const localSampleBuffer = sampleBuffer.subarray(0, sampleBufferSize);
-            sampleBuffer = sampleBuffer.subarray(sampleBufferSize);
-    
-            // Update largeBuffer by simulating a rolling buffer
-            largeBuffer.copyWithin(0, sampleBufferSize);
-            largeBuffer.set(localSampleBuffer, largeBufferSize - sampleBufferSize);
-    
-            const newSpecFeatures = tf.expandDims(featurizer(tf.tensor1d(largeBuffer)), 0);
-            const newAudioFeatures = encoder.predict(newSpecFeatures);
-    
-            const numNewFeatures = sampleBufferSize / hopSize / 2;
-            const audioFeatureBuffer = newAudioFeatures.slice([0, newAudioFeatures.shape[1] - numNewFeatures, 0], [1, numNewFeatures, newAudioFeatures.shape[2]]);
-    
-            allTokens = greedyDecode(audioFeatureBuffer, encoder, predictor, joint, allTokens);
-            updateLog(decodeTokens(allTokens, tokenizer));
-            //console.log(decodeTokens(allTokens, tokenizer));
-
-            // if (++totalRuns % 10 === 0) {
-            //     downloadAudio(largeBuffer, 16000);
-            // }
-        }
     };
     
     console.log("Listening...");
@@ -420,31 +436,31 @@ async function loadModelAndPredict() {
 
     // Now time them
     console.time('encoder');
-    let testAudioFeatures = encoder.predict(testMelFeatures);
+    let testAudioFeatures = encoder.execute(testMelFeatures);
     console.log(testAudioFeatures);
     console.log(testAudioFeatures.shape)
     console.timeEnd('encoder');
 
     console.time('predictor');
-    let testTextFeatures = predictor.predict(testTextTokens);
+    let testTextFeatures = predictor.execute(testTextTokens);
     console.log(testTextFeatures);
     console.log(testTextFeatures.shape);
     console.timeEnd('predictor');
 
     console.time('joint');
     for (let i = 0; i < 350; i++) {
-        let testLogits = joint.predict({
+        let testLogits = joint.execute({
             audio_frame: testJoinerInput1, 
             text_frame: testJoinerInput2
         });
     }
     console.timeEnd('joint');
 
-    doSampleInference(encoder, encoderStreaming, predictor, joint, tokenizer);
+    //doSampleInference(encoder, encoderStreaming, predictor, joint, tokenizer);
 
     document.getElementById('start-listening').disabled = false;
     document.getElementById('start-listening').addEventListener('click', () => {
-        startListening(encoder, predictor, joint, tokenizer);
+        startListening(encoderStreaming, predictor, joint, tokenizer);
     });
 }
 
