@@ -53,7 +53,7 @@ async function loadTensor(url) {
     }
 }
 
-function greedyDecode(audioFeatures, predictor, joint, existingTokens = [], max_length = 200) {
+function greedyDecode(audioFeatures, predictor, joint, max_length = 200) {
     const blank_idx = 1023;
 
     // Initialize tokens array with the blank index, assuming 0 is the blank index
@@ -62,11 +62,6 @@ function greedyDecode(audioFeatures, predictor, joint, existingTokens = [], max_
     const max_audio_time = audioFeatures.shape[1];
     let cur_outputs_per_step = 0;
     const max_outputs_per_step = 10;
-
-    // If there are existing tokens, add them to the tokens array
-    if (existingTokens.length > 0) {
-        tokens = tokens.concat(existingTokens);
-    }
 
     // Convert tokens to a tensor
     let input_ids = tf.tensor2d([tokens], [1, tokens.length], 'int32');
@@ -110,6 +105,51 @@ function greedyDecode(audioFeatures, predictor, joint, existingTokens = [], max_
     }
 
     return tokens.slice(1); // Skip the initial blank token for the result
+}
+
+function incrementalGreedyDecode(audioFeatures, predictor, joint, state) {
+    const blank_idx = 1023;
+    const max_audio_time = audioFeatures.shape[1];
+    const max_outputs_per_step = 10;
+
+    if (!state) {
+        state = {
+            tokens: [blank_idx], 
+            predictor_feature_slice: predictor.predict(tf.tensor2d([[blank_idx]], [1, 1], 'int32')),
+        }
+    }
+
+    let cur_outputs_per_step = 0;
+    let cur_audio_time = 0;
+    let allAudioSlices = tf.split(audioFeatures, audioFeatures.shape[1], 1);
+
+    while (cur_audio_time < max_audio_time) {
+        // Extract a slice of audio features for the current time step
+        const audio_feature_slice = allAudioSlices[cur_audio_time];
+  
+        // Compute joint features for the current audio and predictor features
+        const joint_features = joint.predict({text_frame: state.predictor_feature_slice, audio_frame: audio_feature_slice});
+        const joint_logits = joint_features.squeeze([0]);
+
+        // Get the most likely token index
+        const token_idx = joint_logits.argMax(-1).dataSync()[0];
+
+        if (token_idx === blank_idx || cur_outputs_per_step >= max_outputs_per_step) { // Assuming 0 is the blank token index
+            cur_audio_time += 1;
+            cur_outputs_per_step = 0;
+        } else {
+            state.tokens.push(token_idx);
+
+            // Update input_ids for the next prediction, TODO you can optimize this for long lengths by figuring out what the receptive field is
+            let input_ids = tf.tensor2d([state.tokens], [1, state.tokens.length], 'int32');
+            let new_prediction = predictor.predict(input_ids);
+            state.predictor_feature_slice = new_prediction.slice([0, new_prediction.shape[1] - 1, 0], [1, 1, new_prediction.shape[2]]);
+        
+            cur_outputs_per_step += 1;
+        }
+    }
+
+    return state;
 }
 
 function decodeTokens(tokenIds, tokenizer) {
@@ -178,9 +218,11 @@ async function doSampleInference(encoder, encoderStreaming, predictor, joint, to
         input_state_13: tf.zeros([1, 56, 512]),
     }
 
-    let streamingTokens = [];
+    let decoderState = null;
 
-    for (let i = 0; i < spec_features.shape[1]; i+=2) {
+    let startTime = performance.now();
+
+    for (let i = 0; i < spec_features.shape[1] - (spec_features.shape[1] % 2); i+=2) {
         let firstSpecFeatures = spec_features.slice([0, i, 0], [1, 2, 201]);
 
         let streamingResult = encoderStreaming.predict({
@@ -210,10 +252,12 @@ async function doSampleInference(encoder, encoderStreaming, predictor, joint, to
             input_state_13: streamingResult[13],
         }
 
-        streamingTokens = greedyDecode(newAudioFeatures, predictor, joint, streamingTokens);
-        console.log("Streaming tokens: ", decodeTokens(streamingTokens, tokenizer));
+        decoderState = incrementalGreedyDecode(newAudioFeatures, predictor, joint, decoderState);
+        console.log("Streaming tokens: ", decodeTokens(decoderState.tokens.slice(1), tokenizer));
     }
 
+    let endTime = performance.now();
+    console.log("Time taken for streaming inference: ", endTime - startTime);
 
 }
 
