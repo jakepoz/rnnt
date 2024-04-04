@@ -1,6 +1,15 @@
 # Quit on errors
 set -e
 
+# This script is a bit annoying, as it requires three different conda environments to be set up
+# The first, which is the one you should be in when you call the script, needs to be
+# able to run the python code in rnnt/export_onnx.py
+
+# Then, you need one called onnx2tf which is setup
+# according to the instructions here: https://github.com/PINTO0309/onnx2tf
+
+# Then, you need one called tfjs which has the latest tensorflow installed
+
 checkpoint="/home/jake/rnnt/experiments/basic_char_convjs/run-4/checkpoint_step_70311.pt"
 
 # Export to ONNX
