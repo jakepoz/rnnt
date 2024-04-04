@@ -4,29 +4,29 @@ import * as tf from '@tensorflow/tfjs';
 import { featurizer, FeatureStreamer } from './featurizer';
 
 describe('featurizer function', () => {
-    // it('should correctly compute the STFT of the input waveform', () => {
-    //     // Create a mock waveform as a 1D Tensor. This is a simplistic example.
-    //     const mockWaveform = tf.ones([1600], 'float32');
+    it('should correctly compute the STFT of the input waveform', () => {
+        // Create a mock waveform as a 1D Tensor. This is a simplistic example.
+        const mockWaveform = tf.ones([1600], 'float32');
 
-    //     // Call the featurizer function
-    //     const output = featurizer(mockWaveform);
+        // Call the featurizer function
+        const output = featurizer(mockWaveform);
 
-    //     console.log(output.shape);
-    //     output.print();
-    // });
+        console.log(output.shape);
+        output.print();
+    });
 
-    // it('should correctly compute for a reference sine wave', () => {
-    //     // Make a 4khz sine wave for 16000 samples
-    //     // audio = torch.sin(torch.linspace(0, 2 * 3.14159 * 4000, 16000))
-    //     const audio = tf.linspace(0, 2 * 3.14159 * 4000, 16000);
-    //     const audioSin = tf.sin(audio);
+    it('should correctly compute for a reference sine wave', () => {
+        // Make a 4khz sine wave for 16000 samples
+        // audio = torch.sin(torch.linspace(0, 2 * 3.14159 * 4000, 16000))
+        const audio = tf.linspace(0, 2 * 3.14159 * 4000, 16000);
+        const audioSin = tf.sin(audio);
 
-    //     // Call the featurizer function
-    //     const output = featurizer(audioSin);
+        // Call the featurizer function
+        const output = featurizer(audioSin);
 
-    //     console.log(output.shape);
-    //     output.print();
-    // });
+        console.log(output.shape);
+        output.print();
+    });
 
     it('should match performance in streaming and non-streaming mode', () => {
         // Create a mock waveform as a 1D Tensor. This is a simplistic example.

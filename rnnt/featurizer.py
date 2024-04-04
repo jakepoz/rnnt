@@ -41,12 +41,21 @@ class NormalizedMelSpectrogram(torchaudio.transforms.MelSpectrogram):
         self.mean = mean
         self.invstddev = invstddev
 
+        self._decibel = 2 * 20 * math.log10(torch.iinfo(torch.int16).max)
+        self._gain = pow(10, 0.05 * self._decibel)
+
+    def _piecewise_linear_log(self, x):
+        x = x * self._gain
+        x[x > math.e] = torch.log(x[x > math.e])
+        x[x <= math.e] = x[x <= math.e] / math.e
+        return x
+
     @torch.no_grad()
     def forward(self, waveform):
         mel_spec = super().forward(waveform)
 
         if self.apply_linear_log:
-            mel_spec = _piecewise_linear_log(mel_spec + 1e-6)
+            mel_spec = self._piecewise_linear_log(mel_spec + 1e-6)
 
         mel_spec = (mel_spec - self.mean) * self.invstddev
 
@@ -85,6 +94,8 @@ class TFJSSpectrogram(torch.nn.Module):
         
         if self.apply_linear_log:
             spec = piecewise_linear_log(spec, x_cutoff=10e-3, slope=50)
+        else:
+            spec = torch.log(spec + 1e-6)
         
         if isinstance(self.mean, float):
             spec = (spec - self.mean) * self.invstddev

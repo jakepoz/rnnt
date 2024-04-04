@@ -11,7 +11,7 @@ from .causalconv import CausalConv1d
 # Though the fact that the sequence length is long means that it's not that bad
 # But performance was a bit better with instance norm
 # However, you have to be careful, because in streaming mode, the instance norm is calculated over a much
-# smaller sequence length, so we use track_running_stats=True to use a better estimate of the mean and variance
+# smaller sequence length, so we use track_running_stats=False to use a better estimate of the mean and variance
 class JasperBlock(torch.nn.Module):
     def __init__(self, kernel_size, in_channels, out_channels, dropout, num_sub_blocks, norm_type: Literal["batch", "instance", "instance_affine"] = "batch", additional_context: int = 0):
         super(JasperBlock, self).__init__()
@@ -29,22 +29,22 @@ class JasperBlock(torch.nn.Module):
             if norm_type == "batch":
                 self.norms.append(torch.nn.BatchNorm1d(out_channels))
             elif norm_type == "instance":
-                self.norms.append(torch.nn.InstanceNorm1d(out_channels, track_running_stats=True))
+                self.norms.append(torch.nn.InstanceNorm1d(out_channels, track_running_stats=False))
             elif norm_type == "instance_affine":
-                self.norms.append(torch.nn.InstanceNorm1d(out_channels, track_running_stats=True, affine=True))
+                self.norms.append(torch.nn.InstanceNorm1d(out_channels, track_running_stats=False, affine=True))
 
         self.residual_conv = torch.nn.Conv1d(in_channels, out_channels, 1)
 
         if norm_type == "batch":
             self.residual_norm = torch.nn.BatchNorm1d(out_channels)
         elif norm_type == "instance":
-            self.residual_norm = torch.nn.InstanceNorm1d(out_channels, track_running_stats=True)
+            self.residual_norm = torch.nn.InstanceNorm1d(out_channels, track_running_stats=False)
         elif norm_type == "instance_affine":
-            self.residual_norm = torch.nn.InstanceNorm1d(out_channels, track_running_stats=True, affine=True)
+            self.residual_norm = torch.nn.InstanceNorm1d(out_channels, track_running_stats=False, affine=True)
 
         self.dropout = torch.nn.Dropout(dropout)
         
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         input_x = x
 
         residual_x = self.residual_conv(input_x)
@@ -63,7 +63,7 @@ class JasperBlock(torch.nn.Module):
 
         return x
     
-    def streaming_forward(self, x, states):
+    def streaming_forward(self, x: torch.Tensor, states: list[torch.Tensor]):
         input_x = x
         new_states = []
 
@@ -100,8 +100,6 @@ class AudioEncoder(torch.nn.Module):
         self.prologue_stride = prologue_stride
         self.epilogue_stride = epilogue_stride
 
-        self.total_additional_context = 2 * 4 * 2 # 4 subblocks, 2 additional context each, but after a stride 2 downsampling
-
         # Prologue convolution to take 80-mel spectrograms, stride 2 to downsample
         first_block_input_size = blocks[0].in_channels if len(blocks) > 0 else epilogue_features
 
@@ -110,9 +108,9 @@ class AudioEncoder(torch.nn.Module):
         if norm_type == "batch":
             self.blocks.append(torch.nn.BatchNorm1d(first_block_input_size))
         elif norm_type == "instance":
-            self.blocks.append(torch.nn.InstanceNorm1d(first_block_input_size, track_running_stats=True))
+            self.blocks.append(torch.nn.InstanceNorm1d(first_block_input_size, track_running_stats=False))
         elif norm_type == "instance_affine":
-            self.blocks.append(torch.nn.InstanceNorm1d(first_block_input_size, track_running_stats=True, affine=True))
+            self.blocks.append(torch.nn.InstanceNorm1d(first_block_input_size, track_running_stats=False, affine=True))
 
         self.blocks.append(torch.nn.GELU())
 
@@ -127,9 +125,9 @@ class AudioEncoder(torch.nn.Module):
         if norm_type == "batch":
             self.blocks.append(torch.nn.BatchNorm1d(epilogue_features))
         elif norm_type == "instance":
-            self.blocks.append(torch.nn.InstanceNorm1d(epilogue_features, track_running_stats=True))
+            self.blocks.append(torch.nn.InstanceNorm1d(epilogue_features, track_running_stats=False))
         elif norm_type == "instance_affine":
-            self.blocks.append(torch.nn.InstanceNorm1d(epilogue_features, track_running_stats=True, affine=True))
+            self.blocks.append(torch.nn.InstanceNorm1d(epilogue_features, track_running_stats=False, affine=True))
 
         self.blocks.append(torch.nn.GELU())
 
@@ -140,22 +138,23 @@ class AudioEncoder(torch.nn.Module):
         y = self.blocks(x)
         return y
     
-    def streaming_forward(self, x, state):
+    def streaming_forward(self, x: torch.Tensor, state: list[torch.Tensor]):
         state_index = 0
+        return_state = []
 
         for module in self.blocks:
             if isinstance(module, CausalConv1d):
                 x, new_state = module.streaming_forward(x, state[state_index])
-                state[state_index] = new_state
+                return_state.append(new_state)
                 state_index += 1
             elif isinstance(module, JasperBlock):
                 x, new_states = module.streaming_forward(x, state[state_index:state_index + module.num_sub_blocks])
-                state[state_index:state_index + module.num_sub_blocks] = new_states
+                return_state.extend(new_states)
                 state_index += module.num_sub_blocks
             else:
                 x = module(x)
 
-        return x, state
+        return x, return_state
     
     def streaming_init_state(self, batch_size):
         state = []

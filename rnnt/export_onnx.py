@@ -41,6 +41,21 @@ def convert(checkpoint, config_path=None, export_dir="export"):
                       dynamic_axes={"mel_features": {2: "frames"}},
                       input_names=["mel_features"],
                       output_names=["audio_features"])
+    
+    class StreamingForwardWrapper(torch.nn.Module):
+        def __init__(self, encoder):
+            super().__init__()
+            self.encoder = encoder
+        
+        def forward(self, audio_frame: torch.Tensor, state: list[torch.Tensor]):
+            return self.encoder.streaming_forward(audio_frame, state)
+        
+    init_state = model.encoder.streaming_init_state(1)
+    
+    torch.onnx.export(StreamingForwardWrapper(model.encoder), (example_mel_features, init_state), os.path.join(export_dir, "encoder_streaming.onnx"), verbose=True,
+                        dynamic_axes={"mel_features": {2: "frames"}},
+                        input_names=["mel_features"] + [f"input_state_{i}" for i in range(len(init_state))],
+                        output_names=["audio_features"] + [f"output_state_{i}" for i in range(len(init_state))])
 
     example_tokens = torch.ones(1, 10, dtype=torch.long)
 

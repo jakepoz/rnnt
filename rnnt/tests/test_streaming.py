@@ -73,6 +73,7 @@ class FeaturizerStreamingTest(unittest.TestCase):
 
         print(diff)
         print(torch.max(torch.abs(diff)))
+        self.assertLess(torch.max(torch.abs(diff)), 1e-5)
 
 
 class JasperStreamingTest(unittest.TestCase):

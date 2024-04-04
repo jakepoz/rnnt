@@ -53,7 +53,7 @@ async function loadTensor(url) {
     }
 }
 
-function greedyDecode(audioFeatures, encoder, predictor, joint, existingTokens = [], max_length = 200) {
+function greedyDecode(audioFeatures, predictor, joint, existingTokens = [], max_length = 200) {
     const blank_idx = 1023;
 
     // Initialize tokens array with the blank index, assuming 0 is the blank index
@@ -136,16 +136,7 @@ function updateMemoryInfo() {
     document.getElementById('memory-info').innerText = memoryInfo;
 }
 
-async function doSampleInference(encoder, predictor, joint, tokenizer) {
-    // Now load some sample mel data and attempt to decode it
-    let melData = await loadTensor('samplemels.json');
-    melData = melData.reshape([1, melData.shape[0], melData.shape[1]]);
-    melData = melData.transpose([0, 2, 1]);
-    console.log("melData.shape: ", melData.shape);
-
-
-
-
+async function doSampleInference(encoder, encoderStreaming, predictor, joint, tokenizer) {
     // Load some sample audio directly, and attempt to decode it
     let audioData = await loadTensor('sampleaudio.json');
 
@@ -156,16 +147,74 @@ async function doSampleInference(encoder, predictor, joint, tokenizer) {
     console.log(spec_features.shape);
     spec_features.print();
 
+    console.log(spec_features.slice([0, 100, 0], [1, 1, 201]).shape);
+    spec_features.slice([0, 100, 0], [1, 1, 201]).print();
+
     // Convert the mel data to audio features
     const audioFeatures = encoder.predict(spec_features);
     console.log("audioFeatures.shape: ", audioFeatures.shape);
 
     console.time('greedyDecode');
-    let result = greedyDecode(audioFeatures, encoder, predictor, joint);
+    let result = greedyDecode(audioFeatures, predictor, joint);
     console.log(decodeTokens(result, tokenizer));
     console.timeEnd('greedyDecode');
 
-    updateLog("Result: ", decodeTokens(result, tokenizer));
+    updateLog("Full Greedy Decoded Result: ", decodeTokens(result, tokenizer));
+
+    let state = {
+        input_state_0: tf.zeros([1, 9, 201]),
+        input_state_1: tf.zeros([1, 10, 256]),
+        input_state_2: tf.zeros([1, 10, 256]),
+        input_state_3: tf.zeros([1, 10, 256]),
+        input_state_4: tf.zeros([1, 10, 256]),
+        input_state_5: tf.zeros([1, 12, 256]),
+        input_state_6: tf.zeros([1, 12, 384]),
+        input_state_7: tf.zeros([1, 12, 384]),
+        input_state_8: tf.zeros([1, 12, 384]),
+        input_state_9: tf.zeros([1, 24, 384]),
+        input_state_10: tf.zeros([1, 24, 512]),
+        input_state_11: tf.zeros([1, 24, 512]),
+        input_state_12: tf.zeros([1, 24, 512]),
+        input_state_13: tf.zeros([1, 56, 512]),
+    }
+
+    let streamingTokens = [];
+
+    for (let i = 0; i < spec_features.shape[1]; i+=2) {
+        let firstSpecFeatures = spec_features.slice([0, i, 0], [1, 2, 201]);
+
+        let streamingResult = encoderStreaming.predict({
+            mel_features: firstSpecFeatures,
+            ...state
+        });
+
+
+        let newAudioFeatures = streamingResult[1];
+
+        // This is a horrible destructuring, because the model outputs get scrambled during the conversion process
+        // So you need to just generate this table by hand for now
+        state = {
+            input_state_0: streamingResult[7],
+            input_state_1: streamingResult[0],
+            input_state_2: streamingResult[10],
+            input_state_3: streamingResult[9],
+            input_state_4: streamingResult[2],
+            input_state_5: streamingResult[4],
+            input_state_6: streamingResult[11],
+            input_state_7: streamingResult[12],
+            input_state_8: streamingResult[6],
+            input_state_9: streamingResult[8],
+            input_state_10: streamingResult[5],
+            input_state_11: streamingResult[14],
+            input_state_12: streamingResult[3],
+            input_state_13: streamingResult[13],
+        }
+
+        streamingTokens = greedyDecode(newAudioFeatures, predictor, joint, streamingTokens);
+        console.log("Streaming tokens: ", decodeTokens(streamingTokens, tokenizer));
+    }
+
+
 }
 
 
@@ -198,7 +247,7 @@ async function startListening(encoder, predictor, joint, tokenizer) {
     
     const hopSize = 160, windowSize = 400;
     const sampleBufferSize = 1280;
-    const largeBufferSize = 16000;
+    const largeBufferSize = 32000;
     let largeBuffer = new Float32Array(largeBufferSize);
     let sampleBuffer = new Float32Array(0);
 
@@ -282,6 +331,13 @@ async function loadModelAndPredict() {
         }
     });
 
+    const encoderStreaming = await tf.loadGraphModel('models/encoder_streaming/model.json', {
+        onProgress: (fraction) => {
+            const percentComplete = Math.round(fraction * 100);
+            updateLog(`Encoder model loading progress: ${percentComplete}%`);
+        }
+    });
+
     const predictor = await tf.loadGraphModel('models/predictor/model.json', {
         onProgress: (fraction) => {
             const percentComplete = Math.round(fraction * 100);
@@ -340,7 +396,7 @@ async function loadModelAndPredict() {
     }
     console.timeEnd('joint');
 
-    doSampleInference(encoder, predictor, joint, tokenizer);
+    doSampleInference(encoder, encoderStreaming, predictor, joint, tokenizer);
 
     document.getElementById('start-listening').disabled = false;
     document.getElementById('start-listening').addEventListener('click', () => {

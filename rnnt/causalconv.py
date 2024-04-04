@@ -23,13 +23,13 @@ class CausalConv1d(torch.nn.Module):
         self.left_padding = self.padding - additional_context
 
     # Input shape is (N, C_in, L_in)
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         # Right padding is always zero, because think about it: during training, you don't know what happens AFTER the training sample
         # Padding with zeros is not a valid assumption, so you just would need to shorten the output length by that amount
         x = torch.nn.functional.pad(x, (self.left_padding, 0))
         return self.conv(x)
     
-    def streaming_forward(self, x, state):
+    def streaming_forward(self, x: torch.Tensor, state: torch.Tensor):
         input = torch.cat((state, x), dim=2)
         assert input.shape[2] == (self.conv.kernel_size[0] - 1) * self.conv.dilation[0] + 1
         result = self.conv(input)
