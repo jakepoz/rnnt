@@ -313,7 +313,7 @@ async function startListening(encoderStreaming, predictor, joint, tokenizer) {
 
     audioProcessorNode.port.onmessage = (event) => {
         const incomingSamples = new Float32Array(event.data);
-        
+    
         const audioFeatures = featureStreamer.process(incomingSamples);
 
         if (audioFeatures) {
@@ -345,8 +345,8 @@ async function startListening(encoderStreaming, predictor, joint, tokenizer) {
 
             decoderState = incrementalGreedyDecode(newAudioFeatures, predictor, joint, decoderState);
             console.log("Streaming tokens: ", decodeTokens(decoderState.tokens.slice(1), tokenizer));
-        }
-        
+        } 
+
     };
     
     console.log("Listening...");
@@ -394,7 +394,7 @@ async function loadModelAndPredict() {
     const encoderStreaming = await tf.loadGraphModel('models/encoder_streaming/model.json', {
         onProgress: (fraction) => {
             const percentComplete = Math.round(fraction * 100);
-            updateLog(`Encoder model loading progress: ${percentComplete}%`);
+            updateLog(`Encoder streaming model loading progress: ${percentComplete}%`);
         }
     });
 

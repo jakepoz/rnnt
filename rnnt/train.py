@@ -1,5 +1,7 @@
 import torch
 import torch.nn.functional as F
+import torch.distributed as dist
+import torch.utils
 import torchaudio
 import hydra
 import os
@@ -8,26 +10,42 @@ import numpy as np
 import sentencepiece as spm
 from tqdm import tqdm
 
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 from omegaconf import DictConfig, OmegaConf
 from datasets import concatenate_datasets
 from torch.utils.tensorboard import SummaryWriter
 
 from rnnt.model import RNNTModel
-from rnnt.util import save_model, get_output_dir
+from rnnt.util import save_model, get_output_dir, EmptyWriter
 
 
 @hydra.main(version_base=None, config_path="config", config_name="basic_sp_convjs.yaml")
 def train(cfg: DictConfig) -> None:
-    print(OmegaConf.to_yaml(cfg))
-    output_dir = get_output_dir(cfg)
-    with open(os.path.join(output_dir, "config.yaml"), "w") as f:
-        f.write(OmegaConf.to_yaml(cfg))
-    print(f"Output directory  : {output_dir}")
+    ddp = int(os.environ.get('RANK', -1)) != -1
 
-    device = torch.device("cuda")
+    if ddp:
+        dist.init_process_group(backend="nccl")
+        rank = dist.get_rank()
+        device = torch.device(f"cuda:{rank}")
+        world_size = dist.get_world_size()
+        is_main_process = rank == 0
+        print(f"Starting Rank: {rank}, World size: {world_size}")
+    else:
+        device = torch.device("cuda")
+        is_main_process = True
 
-    # TensorBoard writer setup
-    writer = SummaryWriter(log_dir=output_dir)
+    if is_main_process:
+        print(OmegaConf.to_yaml(cfg))
+        output_dir = get_output_dir(cfg)
+        with open(os.path.join(output_dir, "config.yaml"), "w") as f:
+            f.write(OmegaConf.to_yaml(cfg))
+        print(f"Output directory  : {output_dir}")
+
+        # TensorBoard writer setup
+        writer = SummaryWriter(log_dir=output_dir)
+    else:
+        writer = EmptyWriter()
 
     tokenizer = hydra.utils.instantiate(cfg.tokenizer)
 
@@ -46,6 +64,11 @@ def train(cfg: DictConfig) -> None:
     
     model = model.to(device)
 
+    if ddp:
+        _ddp_model = DDP(model, device_ids=[rank])
+    else:
+        _ddp_model = model
+
     # Wrap those in the processor class, which can provide augmentations, tokenization, etc.
     ds_processor = hydra.utils.get_class(cfg.data.processor_class)
 
@@ -60,7 +83,13 @@ def train(cfg: DictConfig) -> None:
     print(f"Train dataset size: {len(train_ds)}")
     print(f"Eval dataset size : {len(eval_ds)}")
 
-    train_dataloader = hydra.utils.instantiate(cfg.data.train.dataloader, train_ds)
+    if ddp:
+        train_dataloader = hydra.utils.instantiate(cfg.data.train.dataloader, train_ds, 
+                                                   shuffle=None, 
+                                                   sampler=torch.utils.data.distributed.DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True))
+    else:
+        train_dataloader = hydra.utils.instantiate(cfg.data.train.dataloader, train_ds)
+
     eval_dataloader = hydra.utils.instantiate(cfg.data.eval.dataloader, eval_ds)
 
     params = model.parameters()
@@ -76,7 +105,7 @@ def train(cfg: DictConfig) -> None:
     lr_scheduler = hydra.utils.instantiate(cfg.training.lr_scheduler, optimizer, total_steps=total_steps)
 
 
-    model.train()
+    _ddp_model.train()
 
 
     for epoch in range(cfg.training.num_epochs):
@@ -101,31 +130,9 @@ def train(cfg: DictConfig) -> None:
                 input_ids = input_ids[:new_batch_size, :torch.max(input_id_lens).item()]
                 
 
-
-            prepended_input_ids = torch.cat([torch.zeros(input_ids.shape[0], 1, dtype=input_ids.dtype, device=device), input_ids], dim=1)
-            prepended_input_ids[:, 0] = cfg.blank_idx
-
-            # Use traditional predictor for decoder features
-            decoder_features = model.predictor(prepended_input_ids)
-            
-            # Generate the audio features, with gradients this time
-            audio_features = model.encoder(mel_features) # (N, C, L)
-            audio_features = audio_features.permute(0, 2, 1) # (N, L, C)
-            audio_feature_lens = model.encoder.calc_output_lens(mel_feature_lens)
-
-            # Now, apply the joint model to each combination
-            joint_features = model.joint(audio_features, decoder_features)
-
-            # Calculate the loss
-            loss = torchaudio.functional.rnnt_loss(logits=joint_features, 
-                                                   targets=input_ids.int(),
-                                                   logit_lengths=audio_feature_lens.int(),
-                                                   target_lengths=input_id_lens.int(), 
-                                                   blank=-1,
-                                                   clamp=cfg.training.rnnt_grad_clamp,
-                                                   reduction="mean")
-
+            loss = _ddp_model(mel_features, mel_feature_lens, input_ids, input_id_lens, cfg.blank_idx)
             loss.backward()
+
             total_norm = torch.nn.utils.clip_grad_norm_(params, cfg.training.clip_grad_norm)
 
             completed_steps += 1
@@ -161,7 +168,7 @@ def train(cfg: DictConfig) -> None:
 
             # Do an eval step periodically
             if completed_steps % cfg.training.eval_steps == 0 or completed_steps == total_steps:
-                model.eval()
+                _ddp_model.eval()
 
                 print("Starting eval...")
                 originals, decoded = [], []
@@ -191,16 +198,21 @@ def train(cfg: DictConfig) -> None:
                 writer.add_scalar("wer/eval", wer, completed_steps)
                 
                 print("Done with eval...")
-                model.train()
+                _ddp_model.train()
 
 
-            if completed_steps % cfg.training.checkpoint_steps == 0:
+            if completed_steps % cfg.training.checkpoint_steps == 0 and is_main_process:
                 save_model(model, optimizer, completed_steps, output_dir)
             
 
     # Be sure to do one final save at the end
-    save_model(model, optimizer, completed_steps, output_dir)
+    if is_main_process:
+        save_model(model, optimizer, completed_steps, output_dir)
+        
     writer.close()
+
+    if ddp:
+        dist.destroy_process_group()
 
     # Returns last wer
     return wer

@@ -1,5 +1,5 @@
 import torch
-
+import torchaudio
 from rnnt.predictor import LSTMPredictor, ConvPredictor
 
 # Just a simple container for all the submodels, so that you can more easily save and load the entire model
@@ -13,6 +13,34 @@ class RNNTModel(torch.nn.Module):
     @property
     def device(self):
         return next(self.parameters()).device
+
+    def forward(self, mel_features: torch.Tensor, mel_feature_lens: torch.Tensor,
+                      input_ids: torch.Tensor, input_id_lens: torch.Tensor,
+                      blank_idx: int) -> torch.Tensor:
+        prepended_input_ids = torch.cat([torch.zeros(input_ids.shape[0], 1, dtype=input_ids.dtype, device=self.device), input_ids], dim=1)
+        prepended_input_ids[:, 0] = blank_idx
+
+        # Use traditional predictor for decoder features
+        decoder_features = self.predictor(prepended_input_ids)
+        
+        # Generate the audio features, with gradients this time
+        audio_features = self.encoder(mel_features) # (N, C, L)
+        audio_features = audio_features.permute(0, 2, 1) # (N, L, C)
+        audio_feature_lens = self.encoder.calc_output_lens(mel_feature_lens)
+
+        # Now, apply the joint model to each combination
+        joint_features = self.joint(audio_features, decoder_features)
+
+        # Calculate the loss
+        loss = torchaudio.functional.rnnt_loss(logits=joint_features, 
+                                                targets=input_ids.int(),
+                                                logit_lengths=audio_feature_lens.int(),
+                                                target_lengths=input_id_lens.int(), 
+                                                blank=-1,
+                                                clamp=-1,
+                                                reduction="mean")
+        
+        return loss
 
     @torch.no_grad()
     def _greedy_decode_lstm(self, mel_features: torch.Tensor, mel_feature_lens: torch.Tensor, max_length: int = 200) -> list[int]:
@@ -110,42 +138,3 @@ class RNNTModel(torch.nn.Module):
         else:
             raise ValueError("Unknown predictor type")
         
-    @torch.no_grad()
-    def streaming_greedy_decode(self, new_audio_features, existing_tokens, max_length: int = 200):
-        if not isinstance(self.predictor, ConvPredictor):
-            raise NotImplementedError("Streaming greedy decode only works with ConvPredictor for now")
-        
-        assert new_audio_features.shape[0] == 1, "Greedy decoding only works with a batch size of 1"
-
-        tokens = [self.joint.blank_idx] + existing_tokens
-
-        cur_audio_time = 0
-        max_audio_time = new_audio_features.shape[1]
-
-        cur_outputs_per_step = 0
-        max_outputs_per_step = 10
-
-        input_ids = torch.tensor([tokens], dtype=torch.int64, device=self.device)
-        predictor_features = self.predictor(input_ids)
-
-        while cur_audio_time < max_audio_time and len(tokens) < max_length:
-            
-            joint_features = self.joint.single_forward(new_audio_features[:, cur_audio_time, :], predictor_features[:, -1, :])
-
-            # Get the most likely token
-            token_idx = joint_features.argmax(dim=-1).item()
-
-            if token_idx == self.joint.blank_idx or cur_outputs_per_step >= max_outputs_per_step:
-                cur_audio_time += 1
-                cur_outputs_per_step = 0
-            else:
-                tokens.append(token_idx)
-
-                # Update the predictor features, does the full rerun of the conv net for now, later it can be optimized
-                input_ids = torch.tensor([tokens], dtype=torch.int64, device=self.device)
-                predictor_features = self.predictor(input_ids)
-
-                cur_outputs_per_step += 1
-
-        # Return tokens, skipping that first blank which was just to initialize the RNN state
-        return tokens[1:] 

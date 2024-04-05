@@ -41,3 +41,15 @@ def get_next_run_number(base_dir):
         return max(run_nums) + 1
     else:
         return 1
+    
+
+class EmptyWriter:
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def add_scalar(self, *args, **kwargs):
+        pass
+
+    def add_histogram(self, *args, **kwargs):
+        pass
+
