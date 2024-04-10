@@ -53,3 +53,8 @@ class EmptyWriter:
     def add_histogram(self, *args, **kwargs):
         pass
 
+    def add_text(self, *args, **kwargs):
+        pass
+
+    def close(self):
+        pass
