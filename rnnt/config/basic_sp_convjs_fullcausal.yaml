@@ -1,4 +1,4 @@
-model_name: "basic_char_convjs_ddp"
+model_name: "basic_char_convjs_tuning"
 
 num_text_tokens: 1023
 num_total_symbols: 1024
