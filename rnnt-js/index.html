@@ -12,9 +12,11 @@
         <p><strong>TF Backend:</strong> <span id="backend-info"></span></p>
         <p><strong>Memory Info:</strong> <span id="memory-info"></span></p>
         <button id="start-listening" disabled>Start Listening</button>
+        <div id="vuMeter" class="vu-meter">
+            <div id="vuLevel" class="vu-level"></div>
+        </div>        
+        <div id="perf"></div>
         <pre id="log" class="log"></pre>
-        <div class="progress-info">
-        </div>
     </div>
     <script type="module" src="./index.js"></script>
 </body>

@@ -129,6 +129,9 @@ async function startListening(encoderStreaming, predictor, joint, tokenizer) {
         return;
     }
 
+    const vuLevel = document.getElementById('vuLevel');
+    const perfDiv = document.getElementById('perf');
+    
     const stream = await navigator.mediaDevices.getUserMedia({ audio: {
         sampleRate: 48000,
         channelCount: 1,
@@ -166,12 +169,26 @@ async function startListening(encoderStreaming, predictor, joint, tokenizer) {
         input_state_12: tf.zeros([1, 24, 512]),
         input_state_13: tf.zeros([1, 56, 512]),
     }
-  
 
+    let rmsFiltered = 0.0;
+    let portMessages = 0, predictions = 0;
+    let startTime = null;
+  
     audioProcessorNode.port.onmessage = (event) => {
         const incomingSamples = new Float32Array(event.data);
-    
+
+        // Calculate the RMS of the samples for the VU meter
+        const rms = Math.sqrt(incomingSamples.reduce((sum, val) => sum + val * val, 0) / incomingSamples.length);
+        rmsFiltered = 0.90 * rmsFiltered + 0.1 * rms;
+        const rmsPercentage = Math.min(rmsFiltered * 100, 100); 
+        vuLevel.style.width = `${rmsPercentage}%`;
+
         const audioFeatures = featureStreamer.process(incomingSamples);
+        portMessages++;
+
+        if (!startTime) {
+            startTime = performance.now();
+        }
 
         if (audioFeatures) {
             let streamingResult = encoderStreaming.execute({
@@ -201,7 +218,10 @@ async function startListening(encoderStreaming, predictor, joint, tokenizer) {
             }
 
             decoderState = incrementalGreedyDecode(newAudioFeatures, predictor, joint, decoderState);
+            predictions++;
             updateLog("Predicted tokens: ", decodeTokens(decoderState.tokens.slice(1), tokenizer));
+
+            perfDiv.innerText = `Predictions / sec: ${(predictions / ((performance.now() - startTime) / 1000)).toFixed(2)}`;
         } 
 
     };
