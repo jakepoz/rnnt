@@ -8,7 +8,7 @@ You can see a demo [here](https://rnnt.jakepoz.com/). But be warned, the network
 
 ---
 
-Some other nice things about this repo
+Some other nice things about this repo:
  - Basic RNN-T architecture: https://arxiv.org/abs/1211.3711
  - Jasper-like convolutional encoder: https://arxiv.org/abs/1904.03288
  - Options for trying different configurations

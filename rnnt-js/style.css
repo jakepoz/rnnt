@@ -39,3 +39,7 @@ h1 {
     background: green;
     width: 0%
 }
+
+.transcript {
+    margin-top: 1em;
+}

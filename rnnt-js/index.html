@@ -9,13 +9,14 @@
 <body>
     <div class="container">
         <h1>TensorFlow.js RNN-T ASR Demo</h1>
+        <h3>Github: <a href="https://github.com/jakepoz/rnnt">https://github.com/jakepoz/rnnt</a></h3>
         <p><strong>TF Backend:</strong> <span id="backend-info"></span></p>
-        <p><strong>Memory Info:</strong> <span id="memory-info"></span></p>
         <button id="start-listening" disabled>Start Listening</button>
         <div id="vuMeter" class="vu-meter">
             <div id="vuLevel" class="vu-level"></div>
         </div>        
         <div id="perf"></div>
+        <div id="transcript" class="transcript"></div>
         <pre id="log" class="log"></pre>
     </div>
     <script type="module" src="./index.js"></script>

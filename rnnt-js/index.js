@@ -28,11 +28,6 @@ function updateLog(...args) {
 }
 
 
-function updateMemoryInfo() {
-    const memoryInfo = JSON.stringify(tf.memory(), null, 2);
-    document.getElementById('memory-info').innerText = memoryInfo;
-}
-
 async function doSampleInference(encoder, encoderStreaming, predictor, joint, tokenizer) {
     // Load some sample audio directly, and attempt to decode it
     let audioData = await loadTensor('sampleaudio.json');
@@ -131,6 +126,7 @@ async function startListening(encoderStreaming, predictor, joint, tokenizer) {
 
     const vuLevel = document.getElementById('vuLevel');
     const perfDiv = document.getElementById('perf');
+    const transcriptDiv = document.getElementById('transcript');
     
     const stream = await navigator.mediaDevices.getUserMedia({ audio: {
         sampleRate: 48000,
@@ -221,6 +217,8 @@ async function startListening(encoderStreaming, predictor, joint, tokenizer) {
             predictions++;
             updateLog("Predicted tokens: ", decodeTokens(decoderState.tokens.slice(1), tokenizer));
 
+            transcriptDiv.innerText = decodeTokens(decoderState.tokens.slice(1), tokenizer);
+
             perfDiv.innerText = `Predictions / sec: ${(predictions / ((performance.now() - startTime) / 1000)).toFixed(2)}`;
         } 
 
@@ -269,7 +267,6 @@ async function loadModelAndWarmup() {
     //tf.env().set("WEBGPU_DEFERRED_SUBMIT_BATCH_SIZE", 0);
 
     updateLog(JSON.stringify(tf.env().flags, null, 2));
-    updateMemoryInfo();
 
     tf.registerOp("_MklLayerNorm", (node) => {
         const [ x, scale, offset ] = node.inputs;
@@ -334,8 +331,6 @@ async function loadModelAndWarmup() {
 
     await joint.predictAsync([testJoinerInput1, testJoinerInput2]);
     updateLog("Warmed up joint");
-
-    updateMemoryInfo();
 
     // Now time them
     console.time('encoder');
