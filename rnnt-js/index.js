@@ -206,14 +206,40 @@ async function startListening(encoderStreaming, predictor, joint, tokenizer) {
 
     };
     
-    console.log("Listening...");
+    updateLog("Listening...");
+
+    return [audioContext, audioProcessorNode];
+}
+
+async function setupListeningButton(encoderStreaming, predictor, joint, tokenizer) {
+    const button = document.getElementById('start-listening');
+
+    let isListening = false;
+    let audioProcessorNode = null;
+    let audioContext = null;
+
+    button.disabled = false;
+    button.addEventListener('click', async () => {
+        if (!isListening) {
+            isListening = true;
+            [audioContext, audioProcessorNode] = await startListening(encoderStreaming, predictor, joint, tokenizer);
+            button.innerText = "Stop Listening";
+        }
+        else {
+            isListening = false;
+            audioProcessorNode.disconnect();
+            audioContext.close();
+            button.innerText = "Start Listening";
+        }
+    });
 }
 
 async function loadModelAndWarmup() {
     updateLog("Initializing TensorFlow.js...");
 
     document.getElementById('backend-info').innerText = tf.getBackend() + " " + tf.version.tfjs.toString();
- 
+    document.getElementById('start-listening').disabled = true;
+
     updateLog(JSON.stringify(tf.version));
 
     // tf.env().reset();
@@ -315,10 +341,9 @@ async function loadModelAndWarmup() {
 
     //doSampleInference(encoder, encoderStreaming, predictor, joint, tokenizer);
 
-    document.getElementById('start-listening').disabled = false;
-    document.getElementById('start-listening').addEventListener('click', () => {
-        startListening(encoderStreaming, predictor, joint, tokenizer);
-    });
+    setupListeningButton(encoderStreaming, predictor, joint, tokenizer);
+
+    updateLog("Ready, press 'Start Listening' to begin.");
 }
 
 setThreadsCount(4);
