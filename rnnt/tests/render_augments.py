@@ -2,30 +2,45 @@ import os
 import argparse
 import yaml
 import torch
+import torchaudio
+import numpy as np
 from typing import List, Optional
 from jinja2 import Environment, FileSystemLoader
 from datasets import concatenate_datasets
-import numpy as np
 import hydra
-import torchaudio
 from hydra.utils import instantiate
-from rnnt.augment import TimeDomainAugmentor
 from omegaconf import DictConfig, OmegaConf
+from rnnt.augment import TimeDomainAugmentor
 
 def generate_audio_samples(audio_file: str, audio_augmentation_config: dict, output_dir: str, num_individual_samples: int, num_combined_samples: int) -> tuple[dict, List[str]]:
     waveform, sample_rate = torchaudio.load(audio_file, channels_first=False)
-    
     augmentor = instantiate(audio_augmentation_config)
     
     individual_samples = {}
-    for aug in augmentor.augmentations:
+    for aug in augmentor.ff:
         aug_samples = []
 
         orig_p = aug.p
         aug.p = 1.0
 
         for i in range(num_individual_samples):
-            single_augmentor = TimeDomainAugmentor([aug])
+            single_augmentor = TimeDomainAugmentor(ffmpeg_augmentations=[aug], time_domain_augmentations=[])
+            augmented_waveform = single_augmentor(waveform, sample_rate)
+            output_file = os.path.join(output_dir, f"{aug.__class__.__name__}_{i}.wav")
+            torchaudio.save(output_file, augmented_waveform, sample_rate, channels_first=False)
+            aug_samples.append(os.path.basename(output_file))
+
+        aug.p = orig_p
+        individual_samples[aug.__class__.__name__] = aug_samples
+
+    for aug in augmentor.td:
+        aug_samples = []
+
+        orig_p = aug.p
+        aug.p = 1.0
+
+        for i in range(num_individual_samples):
+            single_augmentor = TimeDomainAugmentor(ffmpeg_augmentations=[], time_domain_augmentations=[aug])
             augmented_waveform = single_augmentor(waveform, sample_rate)
             output_file = os.path.join(output_dir, f"{aug.__class__.__name__}_{i}.wav")
             torchaudio.save(output_file, augmented_waveform, sample_rate, channels_first=False)
@@ -43,20 +58,31 @@ def generate_audio_samples(audio_file: str, audio_augmentation_config: dict, out
     
     return individual_samples, combined_samples
 
-def render_html(individual_samples: dict, combined_samples: List[str], output_dir: str, augmentation_params: dict, original_audio: str):
-    env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)))
-    template = env.get_template('render_augments.html')
-    
-    output = template.render(individual_samples=individual_samples, combined_samples=combined_samples, augmentation_params=augmentation_params, original_audio=os.path.basename(original_audio))
-    
-    os.makedirs(output_dir, exist_ok=True)
-    with open(os.path.join(output_dir, 'index.html'), 'w') as f:
-        f.write(output)
+def render_html(template_env, output_dir, original_audio, individual_samples, audio_augmentation_config, combined_samples):
+    template = template_env.get_template('render_augments.html')
 
-    # Copy the original audio file to the output directory
-    torchaudio.save(os.path.join(output_dir, os.path.basename(original_audio)), *torchaudio.load(original_audio))
+    augmentation_params = {}
+
+    for aug in audio_augmentation_config.ffmpeg_augmentations:
+        augmentation_params[aug._target_.split(".")[-1]] = dict(aug)
+
+    for aug in audio_augmentation_config.time_domain_augmentations:
+        augmentation_params[aug._target_.split(".")[-1]] = dict(aug)
+
+    html_content = template.render(
+        original_audio=original_audio,
+        individual_samples=individual_samples,
+        augmentation_params=augmentation_params,
+        combined_samples=combined_samples
+    )
+    
+    with open(os.path.join(output_dir, "index.html"), 'w') as f:
+        f.write(html_content)
 
 def main(audio_file: Optional[str], config_file: str, output_dir: str, num_individual_samples: int, num_combined_samples: int):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
     with open(config_file, 'r') as f:
         config = OmegaConf.create(yaml.safe_load(f))
     
@@ -76,22 +102,11 @@ def main(audio_file: Optional[str], config_file: str, output_dir: str, num_indiv
     
     individual_samples, combined_samples = generate_audio_samples(audio_file, audio_augmentation_config, output_dir, num_individual_samples, num_combined_samples)
     
-    augmentation_params = {
-        'ATempoAugmentation': {
-            'min_tempo_rate': audio_augmentation_config['augmentations'][0]['min_tempo_rate'],
-            'max_tempo_rate': audio_augmentation_config['augmentations'][0]['max_tempo_rate']
-        },
-        'PitchShiftAugmentation': {
-            'min_semitones': audio_augmentation_config['augmentations'][1]['min_semitones'],
-            'max_semitones': audio_augmentation_config['augmentations'][1]['max_semitones']
-        },
-        'TrimAugmentation': {
-            'max_trim': audio_augmentation_config['augmentations'][2]['max_trim']
-        }
-    }
+    # Set up Jinja2 for HTML rendering
+    file_loader = FileSystemLoader(os.path.dirname(__file__))
+    env = Environment(loader=file_loader)
     
-    render_html(individual_samples, combined_samples, output_dir, augmentation_params, original_audio=audio_file)
-
+    render_html(env, output_dir, os.path.basename(audio_file), individual_samples, audio_augmentation_config, combined_samples)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
