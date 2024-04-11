@@ -17,7 +17,7 @@ def generate_audio_samples(audio_file: str, audio_augmentation_config: dict, out
     augmentor = instantiate(audio_augmentation_config)
     
     individual_samples = {}
-    for aug in augmentor.ff:
+    for a, aug in enumerate(augmentor.ff):
         aug_samples = []
 
         orig_p = aug.p
@@ -31,9 +31,9 @@ def generate_audio_samples(audio_file: str, audio_augmentation_config: dict, out
             aug_samples.append(os.path.basename(output_file))
 
         aug.p = orig_p
-        individual_samples[aug.__class__.__name__] = aug_samples
+        individual_samples[f"{aug.__class__.__name__}_{a}"] = aug_samples
 
-    for aug in augmentor.td:
+    for a, aug in enumerate(augmentor.td):
         aug_samples = []
 
         orig_p = aug.p
@@ -47,7 +47,7 @@ def generate_audio_samples(audio_file: str, audio_augmentation_config: dict, out
             aug_samples.append(os.path.basename(output_file))
 
         aug.p = orig_p
-        individual_samples[aug.__class__.__name__] = aug_samples
+        individual_samples[f"{aug.__class__.__name__}_{a}"] = aug_samples
     
     combined_samples = []
     for i in range(num_combined_samples):
@@ -63,11 +63,11 @@ def render_html(template_env, output_dir, original_audio, individual_samples, au
 
     augmentation_params = {}
 
-    for aug in audio_augmentation_config.ffmpeg_augmentations:
-        augmentation_params[aug._target_.split(".")[-1]] = dict(aug)
+    for a, aug in enumerate(audio_augmentation_config.ffmpeg_augmentations):
+        augmentation_params[aug._target_.split(".")[-1] + f"_{a}"] = dict(aug)
 
-    for aug in audio_augmentation_config.time_domain_augmentations:
-        augmentation_params[aug._target_.split(".")[-1]] = dict(aug)
+    for a, aug in enumerate(audio_augmentation_config.time_domain_augmentations):
+        augmentation_params[aug._target_.split(".")[-1] + f"_{a}"] = dict(aug)
 
     html_content = template.render(
         original_audio=original_audio,

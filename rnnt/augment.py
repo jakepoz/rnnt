@@ -7,35 +7,6 @@ class Augmentation():
         self.p = p
 
 
-def create_band_pass_filter(sample_rate, num_bands=256):
-    # Generate random coefficients between 0.1 and 1.0
-    #coeffs = torch.rand(num_bands) * 0.9 + 0.1
-
-    coeffs = [0.9, 0.9, 0.01, 0.9]
-    
-    # Calculate frequency bins
-    freq_bins = torch.linspace(0, sample_rate / 2, num_bands + 1)
-    
-    # Design the filter: Here, we will use the random coefficients as the filter's frequency response
-    # The simplest way to apply this would be using an FIR filter designed with these frequency responses
-    # However, directly designing a time-domain filter from arbitrary frequency responses is non-trivial in PyTorch
-    # We will use an inverse FFT to approximate this (note: this is a heuristic approach and may not create a perfect filter)
-    freq_response = torch.zeros(sample_rate)
-    mid_point = len(freq_response) // 2
-    for i in range(1, num_bands):
-        start_idx = int(freq_bins[i-1])
-        end_idx = int(freq_bins[i])
-        freq_response[start_idx:end_idx] = coeffs[i-1]
-    
-    # Mirror the frequency response for negative frequencies to maintain real-valued time signal
-    freq_response[mid_point+1:] = torch.flip(freq_response[1:mid_point], dims=[0])
-
-    # Convert frequency response to time-domain filter using inverse FFT
-    time_filter = torch.fft.irfft(freq_response, n=sample_rate)
-
-    return time_filter, freq_response
-
-
 # Time-domain augmentations for audio data, inspired by https://github.com/asteroid-team/torch-audiomentations
 class TimeDomainAugmentation(Augmentation):
     def __init__(self, p: float):
@@ -88,9 +59,9 @@ class TimeDomainAugmentor():
         return waveform
 
 
-class PeakLevelAugmentation(TimeDomainAugmentation):
+class PeakLevel(TimeDomainAugmentation):
     def __init__(self, p: float, min_peak_level: float=0.5, max_peak_level: float=1.0):
-        super(PeakLevelAugmentation, self).__init__(p)
+        super(PeakLevel, self).__init__(p)
         self.min_peak_level = min_peak_level
         self.max_peak_level = max_peak_level
 
@@ -103,9 +74,9 @@ class PeakLevelAugmentation(TimeDomainAugmentation):
         return (waveform / waveform.abs().max()) * peak_level
 
 
-class WhiteNoiseAugmentation(TimeDomainAugmentation):
+class WhiteNoise(TimeDomainAugmentation):
     def __init__(self, p: float, min_noise_level: float=0.01, max_noise_level: float=0.1):
-        super(WhiteNoiseAugmentation, self).__init__(p)
+        super(WhiteNoise, self).__init__(p)
         self.min_noise_level = min_noise_level
         self.max_noise_level = max_noise_level
 
@@ -124,9 +95,9 @@ class WhiteNoiseAugmentation(TimeDomainAugmentation):
         return waveform + noise
 
 
-class ShapedNoiseAugmentation(TimeDomainAugmentation):
+class ShapedNoise(TimeDomainAugmentation):
     def __init__(self, p: float, min_noise_level: float = 0.01, max_noise_level: float = 0.1, num_buckets: int = 256):
-        super(ShapedNoiseAugmentation, self).__init__(p)
+        super(ShapedNoise, self).__init__(p)
         self.min_noise_level = min_noise_level
         self.max_noise_level = max_noise_level
         self.num_buckets = num_buckets
@@ -179,9 +150,9 @@ class ShapedNoiseAugmentation(TimeDomainAugmentation):
         return waveform + shaped_noise.unsqueeze(1)
     
 
-class ATempoAugmentation(FFMpegAugmentation):
+class ATempo(FFMpegAugmentation):
     def __init__(self, p: float, min_tempo_rate: float=0.8, max_tempo_rate: float=1.2):
-        super(ATempoAugmentation, self).__init__(p)
+        super(ATempo, self).__init__(p)
         self.min_tempo_rate = min_tempo_rate
         self.max_tempo_rate = max_tempo_rate
 
@@ -190,9 +161,9 @@ class ATempoAugmentation(FFMpegAugmentation):
         return f"atempo={tempo_rate:.2f}"
 
 
-class PitchShiftAugmentation(FFMpegAugmentation):
+class PitchShift(FFMpegAugmentation):
     def __init__(self, p: float, min_semitones: int=-4, max_semitones: int=4):
-        super(PitchShiftAugmentation, self).__init__(p)
+        super(PitchShift, self).__init__(p)
         self.min_semitones = min_semitones
         self.max_semitones = max_semitones
 
@@ -202,9 +173,9 @@ class PitchShiftAugmentation(FFMpegAugmentation):
         return f"asetrate={sample_rate}*2^(1/12*{semitones})"
     
 
-class TrimAugmentation(FFMpegAugmentation):
+class Trim(FFMpegAugmentation):
     def __init__(self, p: float, max_trim: float):
-        super(TrimAugmentation, self).__init__(p)
+        super(Trim, self).__init__(p)
         self.max_trim = max_trim
 
     def filter_string(self, waveform: torch.Tensor, sample_rate: int) -> str:
@@ -215,3 +186,11 @@ class TrimAugmentation(FFMpegAugmentation):
             return f"atrim=start={trim:.4f}"
         else:
             return None
+        
+class ChooseAFilter(FFMpegAugmentation):
+    def __init__(self, p: float, filters: list[str]):
+        super(ChooseAFilter, self).__init__(p)
+        self.filters = filters
+
+    def filter_string(self, waveform: torch.Tensor, sample_rate: int) -> str:
+        return self.filters[torch.randint(len(self.filters), (1,)).item()]

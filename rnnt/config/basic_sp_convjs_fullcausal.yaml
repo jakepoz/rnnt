@@ -121,24 +121,45 @@ data:
   audio_augmentation:
     _target_: rnnt.augment.TimeDomainAugmentor
     ffmpeg_augmentations:
-      - _target_: rnnt.augment.ATempoAugmentation
+      - _target_: rnnt.augment.ATempo
         p: 0.5
         min_tempo_rate: 0.75
         max_tempo_rate: 1.25
-      - _target_: rnnt.augment.PitchShiftAugmentation
+      - _target_: rnnt.augment.PitchShift
         p: 0.5
         min_semitones: -3
         max_semitones: 3
-      - _target_: rnnt.augment.TrimAugmentation
+      - _target_: rnnt.augment.Trim
         p: 0.5
         max_trim: 0.02
+      - _target_: rnnt.augment.ChooseAFilter
+        p: 0.5
+        filters:
+          - "chorus=0.5:0.8:30:0.4:0.1:2"
+          - "chorus=0.4:0.6:25:0.3:0.1:8"
+          - "chorus=0.6:0.8:35:0.3:0.05:5"
+          - "chorus=0.7:0.9:28:0.4:0.05:4"
+          - "chorus=0.5:0.7:40:0.4:0.08:3"
+          - "chorus=0.4:0.6:20:0.5:0.07:6"
+          - "chorus=0.5:0.7:32:0.3:0.09:7"
+          - "chorus=0.6:0.8:30:0.4:0.06:3"
+          - "chorus=0.5:0.7:27:0.5:0.05:4"
+          - "chorus=0.4:0.6:34:0.3:0.04:5"
+      - _target_: rnnt.augment.ChooseAFilter
+        p: 0.5
+        filters:
+          - "acompressor=threshold=-20dB:ratio=4:attack=5:release=250"  # Moderate compression for general leveling
+          - "acompressor=threshold=-30dB:ratio=2:attack=10:release=1000"  # Gentle compression with slow release for natural sound
+          - "acompressor=threshold=-10dB:ratio=8:attack=2:release=50"  # Aggressive compression for high dynamic control
+          - "acompressor=threshold=-15dB:ratio=3:attack=50:release=100"  # Soft compression with moderate attack for smooth transitions
+          - "acompressor=threshold=-25dB:ratio=10:attack=1:release=500"  # Very strong compression with fast attack for impactful speech
     time_domain_augmentations:
-      - _target_: rnnt.augment.ShapedNoiseAugmentation
+      - _target_: rnnt.augment.ShapedNoise
         p: 0.5
         min_noise_level: 0.001
-        max_noise_level: 0.02
+        max_noise_level: 0.015
         num_buckets: 8
-      - _target_: rnnt.augment.PeakLevelAugmentation
+      - _target_: rnnt.augment.PeakLevel
         p: 0.5
         min_peak_level: 0.25
         max_peak_level: 0.99
