@@ -133,10 +133,11 @@ data:
         p: 0.5
         max_trim: 0.02
     time_domain_augmentations:
-      - _target_: rnnt.augment.WhiteNoiseAugmentation
+      - _target_: rnnt.augment.ShapedNoiseAugmentation
         p: 0.5
-        min_noise_level: 0.01
-        max_noise_level: 0.25
+        min_noise_level: 0.001
+        max_noise_level: 0.02
+        num_buckets: 8
       - _target_: rnnt.augment.PeakLevelAugmentation
         p: 0.5
         min_peak_level: 0.25
