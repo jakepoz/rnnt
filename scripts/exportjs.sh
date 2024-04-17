@@ -10,7 +10,7 @@ set -e
 
 # Then, you need one called tfjs which has the latest tensorflow installed
 
-checkpoint="/home/jake/rnnt/experiments/basic_char_convjs_ddp/run-2/checkpoint_step_1406240.pt"
+checkpoint="/home/jake/rnnt/experiments/basic_char_convjs_cv/run-7/checkpoint_step_685656.pt"
 
 # Export to ONNX
 python -m rnnt.export_onnx $checkpoint

@@ -11,14 +11,20 @@ def get_librispeech_dataset(split: str, cache_dir="/media/datasets/librispeech_h
     dataset = datasets.load_dataset("librispeech_asr", cache_dir=cache_dir)
     dataset = dataset[split]
 
-    # This is commented out because all caps results in fewer tokens, and we haven't figured out how to handle > 10k token possibilities yet
-    # Map text to lowercase
-    # def to_lowercase(example):
-    #     example['text'] = example['text'].lower()
-    #     return example
+    return dataset
 
-    # dataset = dataset.map(to_lowercase)
+def get_commonvoice_dataset(split: str, cache_dir="/media/datasets/commonvoice_hf"):
+    dataset = datasets.load_dataset("mozilla-foundation/common_voice_16_1", "en", split=split, cache_dir=cache_dir)
 
+    # Resample to 16khz
+    dataset = dataset.cast_column("audio", datasets.Audio(sampling_rate=16_000))
+
+    def fixup_text(row):
+        row["text"] = row["sentence"]
+        return row
+    
+    dataset = dataset.map(fixup_text)
+    
     return dataset
 
 
@@ -51,7 +57,6 @@ class AudioDatasetProcessor(torch.utils.data.Dataset):
 
         audio_features = self.featurizer(audio)
         text_tokens = torch.tensor(self.tokenizer.encode(text)).to(self.device)
-
 
         return {
             "mel_features": audio_features,

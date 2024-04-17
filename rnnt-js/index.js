@@ -4,7 +4,7 @@ import '@tensorflow/tfjs-backend-wasm';
 
 import { setThreadsCount, getThreadsCount } from "@tensorflow/tfjs-backend-wasm";
 
-import { featurizer, FeatureStreamer } from './featurizer';
+import { classicFeaturizer, FeatureStreamer } from './featurizer';
 import { loadTensor } from './tensor';
 import { greedyDecode, decodeTokens, incrementalGreedyDecode } from './decoder';
 
@@ -147,7 +147,7 @@ async function startListening(encoderStreaming, predictor, joint, tokenizer) {
     console.log("Connected audio source to processor node", audioContext.sampleRate);
 
     let decoderState = null;
-    let featureStreamer = new FeatureStreamer();
+    let featureStreamer = new FeatureStreamer(classicFeaturizer);
 
     let encoderState = {
         input_state_0: tf.zeros([1, 9, 201]),

@@ -42,7 +42,7 @@ describe('featurizer function', () => {
         console.log("non-streaming output shape: ", output.shape);
 
         // Call the streamer once, it should match on the first N frames
-        let streamer = new FeatureStreamer();
+        let streamer = new FeatureStreamer(featurizer);
         let outputStreamer = streamer.process(mockWaveform);
 
         console.log("streaming output shape: ", outputStreamer.shape);  
@@ -52,7 +52,7 @@ describe('featurizer function', () => {
         expect(diff).toBeLessThan(1e-6);
 
         // Now make a new streamer, and feed in the mock waveform in chunks and accumulate all the features
-        streamer = new FeatureStreamer();
+        streamer = new FeatureStreamer(featurizer);
         let outputAccum = tf.zeros([0, 201]);
         const streamerInputSize = 320;
 
