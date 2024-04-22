@@ -1,0 +1,200 @@
+model_name: "textgrad_gemma_2b"
+
+num_text_tokens: 1023
+num_total_symbols: 1024
+blank_idx: 1023
+
+audio_checkpoint: "/home/jake/rnnt/experiments/basic_char_convjs_cv/run-7/checkpoint_step_685656.pt"
+
+tokenizer:
+  _target_: transformers.AutoTokenizer.from_pretrained
+  _args_: ["google/gemma-2b-it"]
+
+llm:
+  _target_: transformers.AutoModelForCausalLM.from_pretrained
+  _args_: ["google/gemma-2b-it"]
+
+prompt:
+  "Please repeat the following text back to me as you understood it: "
+
+translator:
+  _target_: rnnt.translator.ConvTranslator
+  input_dim: 1024
+  stride: 3
+  hidden_dim: 1024
+  output_dim: 2048
+  dropout: 0.2
+
+featurizer:
+  _target_: rnnt.featurizer.TFJSOldPiecewiseSpectrogram
+  n_fft: 400
+  win_length: 400
+  hop_length: 160
+  apply_linear_log: true
+  mean: 15.0
+  invstddev: 0.25
+
+encoder:
+  _target_: rnnt.jasper.AudioEncoder
+  input_features: 201
+  norm_type: batch
+  prologue_kernel_size: 11
+  prologue_stride: 2
+  blocks:
+    - _target_: rnnt.jasper.JasperBlock
+      kernel_size: 11
+      in_channels: 256
+      out_channels: 256
+      dropout: 0.2
+      num_sub_blocks: 4
+      norm_type: batch
+    - _target_: rnnt.jasper.JasperBlock
+      kernel_size: 13
+      in_channels: 256
+      out_channels: 384
+      dropout: 0.2
+      num_sub_blocks: 4   
+      norm_type: batch   
+    - _target_: rnnt.jasper.JasperBlock
+      kernel_size: 25
+      in_channels: 384
+      out_channels: 512
+      dropout: 0.3
+      num_sub_blocks: 4                
+      norm_type: batch
+  epilogue_features: 512
+  epilogue_kernel_size: 29
+  epilogue_dilation: 2
+  output_features: 1024
+
+
+training:
+  mixed_precision: fp32
+  num_epochs: 1
+  log_steps: 2000
+  eval_steps: 20000
+  checkpoint_steps: 100000
+  max_joint_size: 160000
+
+
+  pergpu_minibatch_size: 8
+  #perstep_batch_size: 256
+
+  clip_grad_norm: 10.0
+
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 2e-4
+    eps: 1e-8
+    betas: [0.95, 0.9999]
+    weight_decay: 0.01
+  
+  lr_scheduler:
+    _target_: rnnt.lr_sched.WarmupCosineDecayLR
+    warmup_steps: 2000
+    min_lr_ratio: 0.05
+    total_steps: ???
+
+
+datasets:
+  cache_dir: /media/datasets/librispeech_hf
+
+  librispeech_100:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "train.clean.100"
+    cache_dir: ${datasets.cache_dir}
+  librispeech_360:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "train.clean.360"
+    cache_dir: ${datasets.cache_dir}
+  librispeech_500:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "train.other.500"
+    cache_dir: ${datasets.cache_dir}
+  librispeech_validation:
+    _target_: rnnt.dataset.get_librispeech_dataset
+    split: "validation.clean"
+    cache_dir: ${datasets.cache_dir}
+  commonvoice_train:
+    _target_: rnnt.dataset.get_commonvoice_dataset
+    split: "train"
+    cache_dir: /media/datasets/commonvoice_hf
+
+data:
+  processor_class: rnnt.dataset.AudioDatasetProcessor
+
+  audio_augmentation:
+    _target_: rnnt.augment.TimeDomainAugmentor
+    ffmpeg_augmentations:
+      - _target_: rnnt.augment.ATempo
+        p: 0.5
+        min_tempo_rate: 0.75
+        max_tempo_rate: 1.25
+      - _target_: rnnt.augment.PitchShift
+        p: 0.5
+        min_semitones: -3
+        max_semitones: 3
+      - _target_: rnnt.augment.Trim
+        p: 0.5
+        max_trim: 0.02
+      - _target_: rnnt.augment.ChooseAFilter
+        p: 0.5
+        filters:
+          - "chorus=0.5:0.8:30:0.4:0.1:2"
+          - "chorus=0.4:0.6:25:0.3:0.1:8"
+          - "chorus=0.6:0.8:35:0.3:0.05:5"
+          - "chorus=0.7:0.9:28:0.4:0.05:4"
+          - "chorus=0.5:0.7:40:0.4:0.08:3"
+          - "chorus=0.4:0.6:20:0.5:0.07:6"
+          - "chorus=0.5:0.7:32:0.3:0.09:7"
+          - "chorus=0.6:0.8:30:0.4:0.06:3"
+          - "chorus=0.5:0.7:27:0.5:0.05:4"
+          - "chorus=0.4:0.6:34:0.3:0.04:5"
+      - _target_: rnnt.augment.ChooseAFilter
+        p: 0.5
+        filters:
+          - "acompressor=threshold=-20dB:ratio=4:attack=5:release=250"  # Moderate compression for general leveling
+          - "acompressor=threshold=-30dB:ratio=2:attack=10:release=1000"  # Gentle compression with slow release for natural sound
+          - "acompressor=threshold=-10dB:ratio=8:attack=2:release=50"  # Aggressive compression for high dynamic control
+          - "acompressor=threshold=-15dB:ratio=3:attack=50:release=100"  # Soft compression with moderate attack for smooth transitions
+          - "acompressor=threshold=-25dB:ratio=10:attack=1:release=500"  # Very strong compression with fast attack for impactful speech
+    time_domain_augmentations:
+      - _target_: rnnt.augment.ShapedNoise
+        p: 0.5
+        min_noise_level: 0.001
+        max_noise_level: 0.015
+        num_buckets: 8
+      - _target_: rnnt.augment.PeakLevel
+        p: 0.5
+        min_peak_level: 0.25
+        max_peak_level: 0.99
+        
+  train:
+    dataset:
+        - ${datasets.librispeech_100}
+        - ${datasets.librispeech_360}
+        - ${datasets.librispeech_500}
+        - ${datasets.commonvoice_train}
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: ${training.pergpu_minibatch_size}
+      shuffle: True
+      num_workers: 4
+      collate_fn:
+        _target_: rnnt.dataset.AudioDatasetCollator
+
+  eval:
+    dataset: ${datasets.librispeech_validation}
+    max_elements: 1000
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: 1
+      shuffle: False
+      collate_fn:
+        _target_: rnnt.dataset.AudioDatasetCollator
+
+
+
+

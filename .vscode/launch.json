@@ -5,16 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Train",
+            "name": "Python: Train Textgrad",
             "type": "python",
             "request": "launch",
-            "module": "rnnt.train",
-            "args": [
-                "--config-name", "basic_sp_convjs_fullcausal.yaml",
-            ],
-            "env": {
-                "CUDA_VISIBLE_DEVICES": "1"
-            },
+            "module": "rnnt.train_textgrad",
             "justMyCode": true
         },
         {
