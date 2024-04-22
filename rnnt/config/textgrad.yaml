@@ -15,7 +15,8 @@ llm:
   _args_: ["google/gemma-2b-it"]
 
 prompt:
-  "Please repeat the following text back to me as you understood it: "
+  prefix: "<bos><start_of_turn>user\nRepeat the following text back to me verbatim. Output no other text: "
+  suffix: "<end_of_turn>\n<start_of_turn>model\n"
 
 translator:
   _target_: rnnt.translator.ConvTranslator
@@ -77,7 +78,7 @@ training:
   max_joint_size: 160000
 
 
-  pergpu_minibatch_size: 8
+  pergpu_minibatch_size: 1
   #perstep_batch_size: 256
 
   clip_grad_norm: 10.0

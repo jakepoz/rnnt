@@ -61,6 +61,7 @@ class AudioDatasetProcessor(torch.utils.data.Dataset):
         return {
             "mel_features": audio_features,
             "input_ids": text_tokens,  
+            "text": text,
         }
     
 
@@ -84,4 +85,5 @@ class AudioDatasetCollator:
             "mel_feature_lens": torch.tensor(mel_feature_lens),
             "input_ids": input_ids,
             "input_id_lens": torch.tensor(input_id_lens),
+            "texts": [x["text"] for x in batch],
         }

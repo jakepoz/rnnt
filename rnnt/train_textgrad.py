@@ -63,6 +63,7 @@ def train(cfg: DictConfig) -> None:
     
     encoder = hydra.utils.instantiate(cfg.encoder)
     encoder.load_state_dict({key.removeprefix("encoder."): audio_checkpoint["model_state_dict"][key] for key in audio_checkpoint["model_state_dict"] if key.startswith("encoder.")})
+    encoder = encoder.to(device)
     encoder.eval()
 
     translator = hydra.utils.instantiate(cfg.translator)
@@ -102,7 +103,8 @@ def train(cfg: DictConfig) -> None:
     total_steps = len(train_dataloader) * cfg.training.num_epochs
     completed_steps = 0
 
-    optimizer = hydra.utils.instantiate(cfg.training.optimizer, translator.parameters())
+    params = translator.parameters()
+    optimizer = hydra.utils.instantiate(cfg.training.optimizer, params)
     lr_scheduler = hydra.utils.instantiate(cfg.training.lr_scheduler, optimizer, total_steps=total_steps)
 
 
@@ -121,7 +123,30 @@ def train(cfg: DictConfig) -> None:
             input_ids = batch["input_ids"].to(device)
             input_id_lens = batch["input_id_lens"].to(device)
 
+            assert len(batch["texts"]) == 1, "Batch size must be 1 for this test run"
+            text = batch["texts"][0]
+
+            audio_features = encoder(mel_features) # (N, C, L)
+            audio_features = audio_features.permute(0, 2, 1) # (N, L, C)
+            audio_feature_lens = encoder.calc_output_lens(mel_feature_lens)
+
+            audio_tokens = translator(audio_features) # (N, L, C)
+    
+
+            prefix_tokens = tokenizer.encode(cfg.prompt.prefix, add_special_tokens=False, return_tensors="pt")
+            prefix_embeds = llm.get_input_embeddings()(prefix_tokens).to(device)
+
+            suffix_tokens = tokenizer.encode(cfg.prompt.suffix, add_special_tokens=False, return_tensors="pt")
+            suffix_embeds = llm.get_input_embeddings()(suffix_tokens).to(device)
+
             
+
+            inputs_embeds = torch.cat([prefix_embeds, audio_tokens, suffix_embeds], dim=1)
+
+
+            result = llm.forward(inputs_embeds=inputs_embeds, return_dict=True)
+            
+
 
             loss = _ddp_model(mel_features, mel_feature_lens, input_ids, input_id_lens, cfg.blank_idx)
             loss.backward()
