@@ -23,7 +23,7 @@
             "request": "launch",
             "module": "rnnt.eval",
             "args": [
-                "/home/jake/rnnt/experiments/basic_char_convjs/run-4/checkpoint_step_20000.pt",
+                "/home/jake/rnnt/experiments/basic_char_convjs/run-4/checkpoint_step_70311.pt",
             ],
             "justMyCode": true
         },
@@ -33,7 +33,7 @@
             "request": "launch",
             "module": "rnnt.export_onnx",
             "args": [
-                "/home/jake/rnnt/experiments-old-2/basic_char/run-64/checkpoint_step_40000.pt",
+                "/home/jake/rnnt/experiments/basic_char_convjs/run-4/checkpoint_step_70311.pt",
             ],
             "justMyCode": true
         },
@@ -43,7 +43,7 @@
             "request": "launch",
             "module": "rnnt.tests.render_augments",
             "args": [
-                "rnnt/config/basic_sp_convjs.yaml"
+                "rnnt/config/basic_sp_convjs_fullcausal.yaml"
             ],
             "justMyCode": true
         },
@@ -61,7 +61,7 @@
             "module": "rnnt.infer",
             "args": [
                 //"/home/jake/rnnt/experiments/basic_char/run-16/checkpoint_step_300000.pt",
-                "/home/jake/rnnt/experiments/basic_char_convjs/run-4/checkpoint_step_70311.pt",
+                "/home/jake/rnnt/experiments/basic_char_convjs_ddp/run-2/checkpoint_step_1406240.pt",
                 "/home/jake/rnnt/jake4.wav"
             ],
             "justMyCode": true
